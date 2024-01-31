@@ -10,7 +10,7 @@
             "id": "9facf585-e661-4ee5-8ea0-ac48639236c2",
             "name": "Hikvision Camera Controller",
             "namespace": "trs56",
-            "location": "https://raw.githubusercontent.com/trs56/HubitatPublic/main/HikvisionCameraController.groovy",
+            "location": "https://raw.githubusercontent.com/TR-Systems/hubpub/code/HikvisionCameraController.groovy",
             "required": true
         }
     ]
