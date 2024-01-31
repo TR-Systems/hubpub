@@ -2,6 +2,19 @@
     "author": "Tom Schmidt",
     "gitHubUrl": "https://github.com/TR-Systems",
     "packages": [
-        
+        {
+            "name": "Hikvision Camera Controller",
+            "category": "Integrations",
+            "location": "https://raw.githubusercontent.com/tr-systems/hubpub/code/pkghcc.json",
+            "description": "Hikvision Camera Controller and Alarm Server",
+            "tags": [
+                "Alarm Systems",
+                "Cameras",
+                "Monitoring",
+                "Motion Control",
+                "Safety & Security"
+            ],
+            "id": "9facf585-e661-4ee5-8ea0-ac48639236c2"
+        }
     ]
 }
