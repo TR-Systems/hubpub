@@ -4,4 +4,4 @@ Please see [TR Systems](https://tr-systems.github.io/web/) for more groovy stuff
 Thanks for stopping by.<br>
 Contact: @TomS on the Hubitat Community Forum
 
-First Published: 01-31-2024, Revised:
+First Published: Jan 31 2024
