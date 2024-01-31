@@ -1,0 +1,17 @@
+{
+    "packageName": "Hikvision Camera Controller",
+    "author": "Tom Schmidt",
+    "version": "1.0.0",
+    "dateReleased": "2024-02-01",
+    "releaseNotes": "First Release: Please refer to the User Guide",
+    "documentationLink": "https://tr-systems.github.io/web/HCC_UserGuide.html",
+    "drivers": [
+        {
+            "id": "9facf585-e661-4ee5-8ea0-ac48639236c2",
+            "name": "Hikvision Camera Controller",
+            "namespace": "trs56",
+            "location": "https://raw.githubusercontent.com/trs56/HubitatPublic/main/HikvisionCameraController.groovy",
+            "required": true
+        }
+    ]
+}
