@@ -21,7 +21,7 @@
 // camera has the Alarm Server/HTTP Listening feature available.
 //
 // The User Guide is required reading.
-// https://tr-systems.github.io/web/
+// https://tr-systems.github.io/web/HCC_UserGuide.html
 //******************************************************************************
 // Change Log
 // Date        Version  Release Notes
