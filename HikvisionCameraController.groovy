@@ -22,6 +22,7 @@
 //
 // The User Guide is required reading.
 // https://tr-systems.github.io/web/HCC_UserGuide.html
+// Contact for support: trsystems.help at the little G mail place.
 //******************************************************************************
 // Change Log
 // Date        Version  Release Notes
@@ -32,7 +33,7 @@ import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
 metadata {
     definition (name: "Hikvision Camera Controller", 
-                author: "Thomas R Schmidt", namespace: "trs56", // github userid
+                author: "Thomas R Schmidt", namespace: "tr-systems", // github userid
                 singleThreaded: true) // 
     {
         capability "Actuator"
