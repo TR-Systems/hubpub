@@ -268,9 +268,11 @@ void updated() {
         log.warn "Setting new Exclude Filter:" + strMsg
         device.updateSetting("devExclude", [value:"${strMsg}", type:"string"])
     }
-    if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
-    if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
-    if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
+    if (state.AlarmSvr == "OK") {
+        if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
+        if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
+        if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
+    }
     if (debug) {runIn(1800, ResetDebugLogging, overwrite)}
     
     log.warn "Camera $cname validated, ready for operation"
@@ -914,6 +916,9 @@ void parse(String description) {
         state.LastOtherTime = "na"
         state.OtherEventCount = 0
         state.EventMsgCount = 0
+        if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
+        if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
+        if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
     }
     def rawmsg = parseLanMessage(description)   
     def hdrs = rawmsg.headers  // its a map
