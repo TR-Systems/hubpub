@@ -1,4 +1,4 @@
-### TR-Systems/hubpub
+### tr-systems/hubpub
 Software code in this repository is herein:
 
 *************************************************************************<br>
