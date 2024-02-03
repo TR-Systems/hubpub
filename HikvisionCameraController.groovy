@@ -273,7 +273,7 @@ void updated() {
         if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
         if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
     }
-    if (debug) {runIn(1800, ResetDebugLogging, overwrite)}
+    if (debug || debuga) {runIn(1800, ResetDebugLogging, overwrite)}
     
     log.warn "Camera $cname validated, ready for operation"
     sendEvent(name:"zDriver",value:"OK")
