@@ -1,9 +1,9 @@
 {
     "packageName": "Hikvision Camera Controller",
     "author": "TR Systems",
-    "version": "1.0.0",
-    "dateReleased": "2024-02-01",
-    "releaseNotes": "First Release: Please refer to the User Guide",
+    "version": "1.0.1",
+    "dateReleased": "2024-02-05",
+    "releaseNotes": "Remove/replace Ping function from Ok2Run method for all Commands. Test/practice first HPM Update with new version.",
     "documentationLink": "https://tr-systems.github.io/web/HCC_UserGuide.html",
     "drivers": [
         {
