@@ -27,7 +27,9 @@
 // Change Log
 // Date        Version  Release Notes
 // 01-26-2024  1.0.0    First Release: Please refer to the User Guide
-//
+// 02-05-2024  1.0.1    Remove/Replace Ping function from Ok2Run method for all Commands
+//                      - Instead, set zDriver OFF if GET request for current state times out
+//                      - Test/Practice versioning and update with HPM
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
@@ -210,18 +212,6 @@ void updated() {
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
-    if (state.AlarmSvr == "OK") {
-        state.LastAlarm = "na"
-        state.AlarmCount = 0
-        state.LastMotionEvent = "na"
-        state.LastMotionTime = "na"
-        state.MotionEventCount = 0
-        state.OtherEventState = "inactive"
-        state.LastOtherEvent = "na"
-        state.LastOtherTime = "na"
-        state.OtherEventCount = 0
-        state.EventMsgCount = 0
-    }
     // If using NVR Virtual Host, we need to get the subnet ip address for the dni
     // and make sure the default gateway is set if the alarm server is configured.
     if (port >= 65001) {
@@ -269,27 +259,51 @@ void updated() {
         device.updateSetting("devExclude", [value:"${strMsg}", type:"string"])
     }
     if (state.AlarmSvr == "OK") {
+        state.LastAlarm = "na"
+        state.AlarmCount = 0
+        state.LastMotionEvent = "na"
+        state.LastMotionTime = "na"
+        state.MotionEventCount = 0
+        state.OtherEventState = "inactive"
+        state.LastOtherEvent = "na"
+        state.LastOtherTime = "na"
+        state.OtherEventCount = 0
+        state.EventMsgCount = 0
         if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
         if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
         if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
     }
-    if (debug) {runIn(1800, ResetDebugLogging, overwrite)}
+    if (debug || debuga) {runIn(1800, ResetDebugLogging, overwrite)}
     
     log.warn "Camera $cname validated, ready for operation"
     sendEvent(name:"zDriver",value:"OK")
 }
+//******************************************************************************
+// RESET DEBUG LOGGING - RESET DEBUG LOGGING - RESET DEBUG LOGGING
 //******************************************************************************
 void ResetDebugLogging() {
     log.info "Debug logging is off"
     device.updateSetting("debug", [value:false, type:"bool"])
     device.updateSetting("debuga", [value:false, type:"bool"])
 }
-void ResetCounters() {
-    log.warn "Resetting Alarm Server Counters"
-    state.AlarmCount = 0
-    state.MotionEventCount = 0
-    state.OtherEventCount = 0
-    state.EventMsgCount = 0
+//******************************************************************************
+// PING OK - PING OK - PING OK - PING OK - PING OK - PING OK - PING OK
+//******************************************************************************
+private PingOK(String ip) {
+    try {
+        def pingData = hubitat.helper.NetworkUtils.ping(ip,3)
+        int pr = pingData.packetsReceived.toInteger()
+        if (pr == 3) {
+            return(true)
+        } else {
+            return(false)
+        }
+    }
+    catch (Exception e) {
+        strMsg = e.message
+        log.warn "Ping error: " + strMsg
+        return(false)
+    }
 }
 //******************************************************************************
 // GET CAMERA INFO - GET CAMERA INFO - GET CAMERA INFO - GET CAMERA INFO
@@ -523,7 +537,7 @@ void on() {
     if (device.currentValue("AlarmOut") == "NA") {
         log.warn "Alarm Out Feature is excluded or not available"
         return}
-    if (!Ok2Run()) {return}
+    if (!Ok2Run("ALARMON")) {return}
     log.warn "TRIGGER ALARM on " + cname
     SwitchAlarm("active")
 }
@@ -537,7 +551,7 @@ void off() {
     if (device.currentValue("AlarmOut") == "NA") {
         log.warn "Alarm Out Feature is excluded or not available"
         return}
-    if (!Ok2Run()) {return}
+    if (!Ok2Run("ALARMOFF")) {return}
     log.warn "CLEAR ALARM on " + cname
     SwitchAlarm("inactive")
 }
@@ -548,7 +562,7 @@ void Enable(String filter) {
     String cname = device.getDataValue("Name")
     cname = cname.toUpperCase()
     log.info "Run ENABLE on $cname with filter: " + filter
-    if (!Ok2Run()) {return}
+    if (!Ok2Run("ENABLE")) {return}
     SwitchAll(filter, "true")
     return
 }
@@ -559,14 +573,14 @@ void Disable(String filter) {
     String cname = device.getDataValue("Name")
     cname = cname.toUpperCase()
     log.info "Run DISABLE on $cname with filter: " + filter
-    if (!Ok2Run()) {return}
+    if (!Ok2Run("DISABLE")) {return}
     SwitchAll(filter, "false")
     return
 }
 //******************************************************************************
 // OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN
 //******************************************************************************
-def Ok2Run() {
+def Ok2Run(String cmd) {
     String devstatus = device.currentValue("zDriver")
     String cname = device.getDataValue("Name")
     cname = cname.toUpperCase()
@@ -579,11 +593,6 @@ def Ok2Run() {
     if (devstatus == "CRED") {
         log.warn "Not allowed to run. Fix creds or config and Save Preferences to reset."
         return(false)}
-    if (!PingOK(devIP)) {
-        log.warn "Camera $cname is OFFLINE, no response from ping"
-        sendEvent(name:"zDriver",value:"OFF")
-        return(false)    
-    }
     return(true)
 }
 //******************************************************************************
@@ -807,6 +816,8 @@ private SendGetRequest(String path, String rtype) {
 // LOG GET ERROR - LOG GET ERROR - LOG GET ERROR - LOG GET ERROR
 //******************************************************************************
 private LogGETError() {
+    cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
     log.error "GET Error: " + strMsg
     String errcd = "ERR"
     if (strMsg.contains("code: 401")) {
@@ -824,6 +835,10 @@ private LogGETError() {
     if (strMsg.contains("code: 404")) {
         log.warn "Check Network > Advanced > Integration Protocol > CGI Enabled w/Authentication=Digest/Basic"
         log.warn "Hikvision-CGI is NOT ENABLED or IP is not a Hikvision camera"
+    }
+    if (strMsg.contains("No route to host") || strMsg.contains ("connect timed out")) {
+        log.warn "$cname is OFFLINE"
+        errcd = "OFF"
     }
     return(errcd)
 }
@@ -860,25 +875,6 @@ private SendPutRequest(String strPath, String strXML) {
     }}
     catch (Exception e) {
         strMsg = e.message
-    }
-}
-//******************************************************************************
-// PING OK - PING OK - PING OK - PING OK - PING OK - PING OK - PING OK
-//******************************************************************************
-private PingOK(String ip) {
-    try {
-        def pingData = hubitat.helper.NetworkUtils.ping(ip,3)
-        int pr = pingData.packetsReceived.toInteger()
-        if (pr == 3) {
-            return(true)
-        } else {
-            return(false)
-        }
-    }
-    catch (Exception e) {
-        strMsg = e.message
-        log.warn "Ping error: " + strMsg
-        return(false)
     }
 }
 //******************************************************************************
@@ -1042,6 +1038,13 @@ void ResetUsupEvent() {
     cname = cname.toUpperCase()
     state.OtherEventState = "inactive"
     log.info "OTHER EVENT CLEARED on " + cname
+}
+void ResetCounters() {
+    log.warn "Resetting Alarm Server Counters"
+    state.AlarmCount = 0
+    state.MotionEventCount = 0
+    state.OtherEventCount = 0
+    state.EventMsgCount = 0
 }
 //*****************************************************************
 // Static Constants
