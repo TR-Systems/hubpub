@@ -30,8 +30,12 @@
 // 02-05-2024  1.0.1    Remove/Replace Ping function from Ok2Run method for all Commands
 //                      - Instead, set zDriver OFF if GET request for current state times out
 //                      - Test/Practice versioning and update with HPM
+// 02-06-2024  1.0.2    Add link to User Guide on device driver page (provided by jtp10181)
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
+//******************************************************************************
+@Field static final String DRIVER = "HCC 1.0.2"
+@Field static final String USER_GUIDE = "https://tr-systems.github.io/web/HCC_UserGuide.html"
 //******************************************************************************
 metadata {
     definition (name: "Hikvision Camera Controller", 
@@ -109,30 +113,38 @@ metadata {
               title: "Debug logging for Alarm Server",
               description: "(resets in 30 minutes)",
               defaultValue: false)
+        	//Help Link
+    	input name: "UserGuide", type: "hidden", title: fmtHelpInfo("User Guide")
     }
 }
 //******************************************************************************
-String strMsg = " " // Used to pass status (OK or errmsg) back from
-//                     SendGet/Put Requests for logging and program
-//                     control in the calling methods
+// This "global" is used to pass status (OK or error msg) back from the
+// SendGet/Put Request methods, then used for logging and program control in the
+// calling methods. Don't mess with strMsg unless you know what you're doing.
+String strMsg = " " 
+//******************************************************************************
+// CODER BEWARE HACK provided by jtp10181 - unsupported - undocumented
+// A Help Icon for doc links needs to be a built-in setting for all device drivers
+// Not all drivers are plug n play. Certainly not this one.
+//******************************************************************************
+String fmtHelpInfo(String str) {
+    // str="User Guide", USER_GUIDE=link, DRIVER="HCC 1.0.x"
+    // Two different links are provided but for this driver, they are the same
+    // Don't even attempt to figure out all of this HTML. Just use it... :)
+	String prefLink = "<a href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 70%;'>${DRIVER}</div></a>"
+	String topStyle = "style='font-size: 18px; padding: 1px 12px; border: 2px solid Crimson; border-radius: 6px;'" //SlateGray
+	String topLink = "<a ${topStyle} href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 14px;'>${DRIVER}</div></a>"
+    return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>" +
+           "<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</li></ul></div>"
+}
 //******************************************************************************
 // INSTALLED - INSTALLED - INSTALLED - Installing New Camera Device
 //******************************************************************************
 void installed() {
-    def l = []
-    l << "IMPORTANT: Please do not Save Preferences until your camera has"
-    l << "been configured to operate with this driver. The information"
-    l << "you need to do that can be found here:"
-    l << " "
-    l << "https://tr-systems.github.io/web/HCC_UserGuide.html"
-    l << " "
-    l << "Thank you. You may now hand over your credentials and proceed."
-    def lr = l.reverse()
-    lr.each {log.info it}
-    sendEvent(name:"zDriver",
-              value:"Hello! First camera? PLEASE OPEN THE LOG NOW. If not, please proceed.")
-
+    log.info "Installing new camera"
+    log.info "Setting device Name to Label: " + device.getLabel()
     device.setName(device.getLabel())
+    sendEvent(name:"zDriver",value:"Please read the User Guide before adding your first camera.")
 }
 //******************************************************************************
 // UPDATED - UPDATED - UPDATED - Preferences Saved
