@@ -26,15 +26,19 @@
 //******************************************************************************
 // Change Log
 // Date        Version  Release Notes
-// 01-26-2024  1.0.0    First Release: Please refer to the User Guide
-// 02-05-2024  1.0.1    Remove/Replace Ping function from Ok2Run method for all Commands
+// 2024-01-26  1.0.0    First Release: Please refer to the User Guide
+// 2024-02-05  1.0.1    Remove/Replace Ping function from Ok2Run method for all Commands
 //                      - Instead, set zDriver OFF if GET request for current state times out
 //                      - Test/Practice versioning and update with HPM
-// 02-06-2024  1.0.2    Add link to User Guide on device driver page (provided by jtp10181)
+// 2024-02-06  1.0.2    Add link to User Guide on device driver page (provided by jtp10181)
+// 2024-02-07  1.0.3    Remove Link to User Guide from top of device driver page due to
+//                      overlay of Events & Logs buttons when viewing device on a phone.
+//                      - Provide link to User Guide in hidden input field only.
+//                      - Minor debug logging improvements
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
-@Field static final String DRIVER = "HCC 1.0.2"
+@Field static final String DRIVER = "HCC 1.0.3"
 @Field static final String USER_GUIDE = "https://tr-systems.github.io/web/HCC_UserGuide.html"
 //******************************************************************************
 metadata {
@@ -128,14 +132,19 @@ String strMsg = " "
 // Not all drivers are plug n play. Certainly not this one.
 //******************************************************************************
 String fmtHelpInfo(String str) {
-    // str="User Guide", USER_GUIDE=link, DRIVER="HCC 1.0.x"
-    // Two different links are provided but for this driver, they are the same
-    // Don't even attempt to figure out all of this HTML. Just use it... :)
+    // On Entry: str="User Guide", USER_GUIDE=url, DRIVER="HCC 1.0.x"
+    // prefLink is the text and link that will appear in the "hidden" input field button.
+    // topStyle & Link will create a bordered text box positioned Npx away from
+    // the upper right corner of the page. That box will then float in that
+    // relative position when the browser page is widened or narrowed.
+    // Thus, when viewing the device on a PHONE, that box will overlay the
+    // Events and Logs button at the top of the page so I'm not using it
+    // for that reason. The link in the title for the input field is all I need.
 	String prefLink = "<a href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 70%;'>${DRIVER}</div></a>"
-	String topStyle = "style='font-size: 18px; padding: 1px 12px; border: 2px solid Crimson; border-radius: 6px;'" //SlateGray
+	String topStyle = "style='font-size: 14px; padding: 1px 6px; border: 2px solid Crimson; border-radius: 6px;'" //SlateGray
 	String topLink = "<a ${topStyle} href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 14px;'>${DRIVER}</div></a>"
-    return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>" +
-           "<div style='text-align: center; position: absolute; top: 46px; right: 60px; padding: 0px;'><ul class='nav'><li>${topLink}</li></ul></div>"
+    return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>"
+//         + "<div style='text-align: center; position: absolute; top: 46px; right: 4px; padding: 0px;'><ul class='nav'><li>${topLink}</li></ul></div>"
 }
 //******************************************************************************
 // INSTALLED - INSTALLED - INSTALLED - Installing New Camera Device
@@ -144,7 +153,7 @@ void installed() {
     log.info "Installing new camera"
     log.info "Setting device Name to Label: " + device.getLabel()
     device.setName(device.getLabel())
-    sendEvent(name:"zDriver",value:"Please read the User Guide before adding your first camera.")
+    sendEvent(name:"zDriver",value:"Please read the User Guide before adding your first camera (scroll down for link)")
 }
 //******************************************************************************
 // UPDATED - UPDATED - UPDATED - Preferences Saved
@@ -356,7 +365,6 @@ private GetCameraInfo() {
 private GetUserInfo() {
     String errcd = ""
     log.info "Validating Operator account"
-    if (debug) {log.debug "GET: " + FeaturePaths.CamUsers}
     // This GET will only return the user being used, not the entire list
     // Only the admin account gets the entire list of users
     // So glad it does this because now its easy to get the user id for the next step
@@ -374,7 +382,6 @@ private GetUserInfo() {
         return("ERR")
     }
     String path = FeaturePaths.UserPerm + userid
-    if (debug) {log.debug "GET: " + path}
     // Get User Permissions
     xml = SendGetRequest(path,"GPATH")
     if (strMsg != "OK") {
@@ -398,7 +405,6 @@ private GetSubnetIP() {
     String ipaddr = ""
     // Get Interfaces/1 (making the assumption its connected on 1)
     log.info "Checking Network Configuration"
-    if (debug) {log.info "GET: " + FeaturePaths.Network}
     xml = SendGetRequest(FeaturePaths.Network,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -428,7 +434,6 @@ private GetAlarmServerInfo() {
     String svrurl = ""
     String svrport = ""
     log.info "Checking Alarm Server configuration"
-    if (debug) {log.info "GET: " + FeaturePaths.AlarmSvr}
     xml = SendGetRequest(FeaturePaths.AlarmSvr,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -511,8 +516,6 @@ private GetSetFeatureState(String Feature) {
     String camstate = ""
 
     String Path = FeaturePaths."$Feature"
-    
-    if (debug) {log.debug "GET $Path"}
 
     def xml = SendGetRequest(Path, "GPATH")
     if (strMsg == "OK") {
@@ -617,7 +620,6 @@ private SwitchAlarm(String newstate) {
     String camstate = " "
     String camaistate = " "
     String path = FeaturePaths.AlarmIO
-    if (debug) {log.info "GET " + path}
     def xml = SendGetRequest(path, "GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -798,7 +800,7 @@ private SendGetRequest(String path, String rtype) {
     parms.put("headers", headers)
     parms.put("requestContentType", "application/xml")
     if (rtype == "XML") {parms.put ("textParser", true)}
-    
+    if (debug) {log.debug "GET  ${path}"}
     try {httpGet(parms) 
         { response ->
             if (debug) {
