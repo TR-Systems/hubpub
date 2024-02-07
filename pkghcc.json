@@ -1,9 +1,9 @@
 {
     "packageName": "Hikvision Camera Controller",
     "author": "TR Systems",
-    "version": "1.0.2",
-    "dateReleased": "2024-02-06",
-    "releaseNotes": "Add link to User Guide on device driver page, courtesy of jtp10181",
+    "version": "1.0.3",
+    "dateReleased": "2024-02-07",
+    "releaseNotes": "Remove link to User Guide from top of device driver page\n- Link still provided in the null input field button\nMinor debug logging improvements",
     "documentationLink": "https://tr-systems.github.io/web/HCC_UserGuide.html",
     "drivers": [
         {
