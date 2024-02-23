@@ -35,14 +35,15 @@
 //                      overlay of Events & Logs buttons when viewing device on a phone.
 //                      - Provide link to User Guide in hidden input field only.
 //                      - Minor debug logging improvements
-// 2024-02-23  1.0.4    Bug fix: Update old Hikvision IPMD url paths to ISAPI paths.
-//                      Affected features: Basic Motion, Alarm Out trigger, IO Status.
-//                      Required to support newer cameras. May break much older cams.
-//                      Log the URL for all GET requests issued during Save Preferences.
+// 2024-02-22  1.0.4    Bug fix: Update old Hikvision IPMD url paths to ISAPI paths.
+//                      - Affected features: Basic Motion, Alarm Out trigger, IO Status.
+//                      - Required to support newer cameras. May break much older cams.
+// 2024-02-23  1.0.5    Bug fix: Null value exception for camera name when logging GET error during save 
+//                      Alarm Server: Log event messages for "Unknown" events for reporting to tr-systems.
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
-@Field static final String DRIVER = "HCC 1.0.3"
+@Field static final String DRIVER = "HCC 1.0.5"
 @Field static final String USER_GUIDE = "https://tr-systems.github.io/web/HCC_UserGuide.html"
 //******************************************************************************
 metadata {
@@ -174,6 +175,7 @@ void updated() {
     }
     unschedule()    
     state.clear()
+    
     // Required settings won't be null
     devIP = devIP.trim()
     devPort = devPort.trim()
@@ -183,8 +185,8 @@ void updated() {
     device.updateSetting("devPort", [value:"${devPort}", type:"string"])
     device.updateSetting("devCred", [value:"${devCred}", type:"string"])
     device.updateSetting("devName", [value:"${devName}", type:"string"])
-    // Remove all Data fields
-    device.removeDataValue("Name")
+    // Start Fresh
+    device.updateDataValue("Name","(initializing)") // 1.0.5 bug fix
     device.removeDataValue("Model")
     device.removeDataValue("Firmware")
 
@@ -372,7 +374,6 @@ private GetUserInfo() {
     // This GET will only return the user being used, not the entire list
     // Only the admin account gets the entire list of users
     // So glad it does this because now its easy to get the user id for the next step
-    if (!debug) {log.info "GET ${FeaturePaths.CamUsers}"}
     xml = SendGetRequest(FeaturePaths.CamUsers,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -388,7 +389,6 @@ private GetUserInfo() {
     }
     String path = FeaturePaths.UserPerm + userid
     // Get User Permissions
-    if (!debug) {log.info "GET $path"}
     xml = SendGetRequest(path,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -411,7 +411,6 @@ private GetSubnetIP() {
     String ipaddr = ""
     // Get Interfaces/1 (making the assumption its connected on 1)
     log.info "Checking Network Configuration"
-    if (!debug) {log.info "GET $FeaturePaths.Network"}
     xml = SendGetRequest(FeaturePaths.Network,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -441,7 +440,6 @@ private GetAlarmServerInfo() {
     String svrurl = ""
     String svrport = ""
     log.info "Checking Alarm Server configuration"
-    if (!debug) {log.info "GET $FeaturePaths.AlarmSvr"}
     xml = SendGetRequest(FeaturePaths.AlarmSvr,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -524,8 +522,6 @@ private GetSetFeatureState(String Feature) {
     String camstate = ""
 
     String Path = FeaturePaths."$Feature"
-    
-    if (!debug) {log.info "GET $Path"}
     
     def xml = SendGetRequest(Path, "GPATH")
     
@@ -842,6 +838,7 @@ private SendGetRequest(String path, String rtype) {
 //******************************************************************************
 private LogGETError() {
     cname = device.getDataValue("Name")
+    if (cname == null) {cname = "null"} // 1.0.5 bug fix
     cname = cname.toUpperCase()
     log.error "GET Error: " + strMsg
     String errcd = "ERR"
@@ -912,6 +909,7 @@ void parse(String description) {
     Boolean ns = false   // Not Supported and Unknown Events are logged and ignored
 
     String cname = device.getDataValue("Name")
+    if (cname == null) {cname = "null"} // 1.0.5 bug fix just to be safe
     cname = cname.toUpperCase()
 
     if (device.currentValue("zDriver") == "OFF") {
@@ -963,12 +961,13 @@ void parse(String description) {
                 ok = true
                 break}
         }
-        for (event in UnsupportedEvents) {
-            if (etype == event) {
-                ns = true
-                break}
+        if (!ok) {
+            for (event in UnsupportedEvents) {
+                if (etype == event) {
+                    ns = true
+                    break}
+            }
         }
-        etype = etype.substring(1,etype.length()-1)
     } else {
         msg = rawmsg.body.toString()
         if (debuga) {
@@ -982,17 +981,20 @@ void parse(String description) {
                 ok = true
                 break}
         }
-        for (event in UnsupportedEvents) {
-            if (msg.contains("$event")) {
-                etype = event
-                ns = true
-                break}
+        if (!ok) {
+            for (event in UnsupportedEvents) {
+                if (msg.contains("$event")) {
+                    etype = event
+                    ns = true
+                    break}
+            }
         }
-        etype = etype.substring(1,etype.length()-1)
     }
     if (!ok && !ns) {
-        etype = "Unknown"
         ns = true
+        etype = "Unknown"
+    } else {
+        etype = etype.substring(1,etype.length()-1)
     }
     // Translate to user/driver friendly names
     etype = TranslateEvents."$etype"
@@ -1007,6 +1009,17 @@ void parse(String description) {
             state.LastOtherEvent = etype
             state.LastOtherTime = new Date().format ("EEE MMM d HH:mm:ss")
             state.OtherEventCount = state.OtherEventCount + 1
+            // 1.0.5 Update - Log Unknown Events
+            if (etype == "Unknown") {
+                if (!debuga) {
+                    log.warn msg
+                    log.warn "UNKNOWN ALARM SERVER EVENT *************************"
+                    log.warn "Please report this event to trsystems.help@gmail.com"
+                } else {
+                    log.warn "UNKNOWN ALARM SERVER EVENT *************************"
+                    log.warn "Please report this event to trsystems.help@gmail.com"
+                }
+            }
         }
         // Give whatever this is a few minutes to run its course too
         // Most of these are one-time(?) but a few are ongoing like motion
