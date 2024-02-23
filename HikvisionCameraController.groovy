@@ -1011,14 +1011,9 @@ void parse(String description) {
             state.OtherEventCount = state.OtherEventCount + 1
             // 1.0.5 Update - Log Unknown Events
             if (etype == "Unknown") {
-                if (!debuga) {
-                    log.warn msg
-                    log.warn "UNKNOWN ALARM SERVER EVENT *************************"
-                    log.warn "Please report this event to trsystems.help@gmail.com"
-                } else {
-                    log.warn "UNKNOWN ALARM SERVER EVENT *************************"
-                    log.warn "Please report this event to trsystems.help@gmail.com"
-                }
+                if (!debuga) {log.warn msg}
+                log.warn "UNKNOWN ALARM SERVER EVENT *************************"
+                log.warn "Please report this event to trsystems.help@gmail.com"
             }
         }
         // Give whatever this is a few minutes to run its course too
