@@ -35,6 +35,10 @@
 //                      overlay of Events & Logs buttons when viewing device on a phone.
 //                      - Provide link to User Guide in hidden input field only.
 //                      - Minor debug logging improvements
+// 2024-02-23  1.0.4    Bug fix: Update old Hikvision IPMD url paths to ISAPI paths.
+//                      Affected features: Basic Motion, Alarm Out trigger, IO Status.
+//                      Required to support newer cameras. May break much older cams.
+//                      Log the URL for all GET requests issued during Save Preferences.
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
@@ -368,6 +372,7 @@ private GetUserInfo() {
     // This GET will only return the user being used, not the entire list
     // Only the admin account gets the entire list of users
     // So glad it does this because now its easy to get the user id for the next step
+    if (!debug) {log.info "GET ${FeaturePaths.CamUsers}"}
     xml = SendGetRequest(FeaturePaths.CamUsers,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -383,6 +388,7 @@ private GetUserInfo() {
     }
     String path = FeaturePaths.UserPerm + userid
     // Get User Permissions
+    if (!debug) {log.info "GET $path"}
     xml = SendGetRequest(path,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -405,6 +411,7 @@ private GetSubnetIP() {
     String ipaddr = ""
     // Get Interfaces/1 (making the assumption its connected on 1)
     log.info "Checking Network Configuration"
+    if (!debug) {log.info "GET $FeaturePaths.Network"}
     xml = SendGetRequest(FeaturePaths.Network,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -434,6 +441,7 @@ private GetAlarmServerInfo() {
     String svrurl = ""
     String svrport = ""
     log.info "Checking Alarm Server configuration"
+    if (!debug) {log.info "GET $FeaturePaths.AlarmSvr"}
     xml = SendGetRequest(FeaturePaths.AlarmSvr,"GPATH")
     if (strMsg != "OK") {
         errcd = LogGETError()
@@ -516,8 +524,11 @@ private GetSetFeatureState(String Feature) {
     String camstate = ""
 
     String Path = FeaturePaths."$Feature"
-
+    
+    if (!debug) {log.info "GET $Path"}
+    
     def xml = SendGetRequest(Path, "GPATH")
+    
     if (strMsg == "OK") {
         if (Feature == "AlarmIO") {
             camstate = xml.IOPortStatus[0].ioState.text()
@@ -1143,11 +1154,11 @@ void ResetCounters() {
     UserPerm:"/ISAPI/Security/UserPermission/",
     AlarmSvr:"/ISAPI/Event/notification/httpHosts",
     AlarmInH:"/ISAPI/System/IO/inputs/1",
-    AlarmIO:"/IO/status",
-    AlarmOut:"/IO/outputs/1/trigger",
+    AlarmIO:"/ISAPI/System/IO/status",
+    AlarmOut:"/ISAPI/System/IO/outputs/1/trigger",
     Intrusion:"/ISAPI/Smart/FieldDetection/1",
     LineCross:"/ISAPI/Smart/LineDetection/1",
-    MotionD:"/MotionDetection/1",
+    MotionD:"/ISAPI/System/Video/inputs/channels/1/motionDetection",
     ObjectR:"/ISAPI/Smart/attendedBaggage/1",
     PIRSensor:"/ISAPI/WLAlarm/PIR",
     RgnEnter:"/ISAPI/Smart/regionEntrance/1",
