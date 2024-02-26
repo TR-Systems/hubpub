@@ -3,7 +3,7 @@
     "author": "TR-Systems",
     "version": "1.0.6",
     "dateReleased": "2024-02-26",
-    "releaseNotes": "Alarm Server Upgrade: Add support for Motion Duration Events",
+    "releaseNotes": "Alarm Server Upgrade to add support for Motion Duration Events",
     "documentationLink": "https://tr-systems.github.io/web/HCC_UserGuide.html",
     "drivers": [
         {
