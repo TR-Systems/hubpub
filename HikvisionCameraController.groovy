@@ -33,17 +33,16 @@
 // 2024-02-06  1.0.2    Add link to User Guide on device driver page (provided by jtp10181)
 // 2024-02-07  1.0.3    Remove Link to User Guide from top of device driver page due to
 //                      overlay of Events & Logs buttons when viewing device on a phone.
-//                      - Provide link to User Guide in hidden input field only.
-//                      - Minor debug logging improvements
 // 2024-02-22  1.0.4    Bug fix: Update old Hikvision IPMD url paths to ISAPI paths.
 //                      - Affected features: Basic Motion, Alarm Out trigger, IO Status.
-//                      - Required to support newer cameras. May break much older cams.
+//                      - Required to support newer cameras. May break older cams.
 // 2024-02-23  1.0.5    Bug fix: Null value exception for camera name when logging GET error during save 
 //                      Alarm Server: Log event messages for "Unknown" events for reporting to tr-systems.
+// 2024-02-26  1.0.6    Alarm Server: Add support for new eventType "duration" and associated relationEvent
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
-@Field static final String DRIVER = "HCC 1.0.5"
+@Field static final String DRIVER = "HCC 1.0.6"
 @Field static final String USER_GUIDE = "https://tr-systems.github.io/web/HCC_UserGuide.html"
 //******************************************************************************
 metadata {
@@ -907,6 +906,7 @@ void parse(String description) {
     String estate = ""   // eventState
     Boolean ok = false   // Only Supported Motion Events trigger motion on this device
     Boolean ns = false   // Not Supported and Unknown Events are logged and ignored
+    String logtag = ""   // Logging tag for new Motion/Duration Event - v1.0.6
 
     String cname = device.getDataValue("Name")
     if (cname == null) {cname = "null"} // 1.0.5 bug fix just to be safe
@@ -942,19 +942,24 @@ void parse(String description) {
     def rawmsg = parseLanMessage(description)   
     def hdrs = rawmsg.headers  // its a map
     def msg = ""               // tbd
+    if (debuga) {log.warn "EVENT MESSAGE RECEIVED"} // v1.0.6
     if (debuga) {hdrs.each {log.debug it}}
     // This is the key to knowing what you have to work with
-    if (hdrs["Content-Type"] == "application/xml; charset=\"UTF-8\"") {
+    if (hdrs["Content-Type"] == "application/xml; charset=\"UTF-8\"" || hdrs["Content-Type"] == "application/xml") {
         msg = new XmlSlurper().parseText(new String(rawmsg.body))
-        if (debuga) {
-            log.debug "EOM********************************************************"
-            log.debug groovy.xml.XmlUtil.escapeXml(rawmsg.body)
-            log.debug "XML EVENT MESSAGE******************************************"
-        }
+        if (debuga) {log.debug "MSG:" + groovy.xml.XmlUtil.escapeXml(rawmsg.body)} // v1.0.6
         estate = msg.eventState.text()
         etype = msg.eventType.text()
-        if (debuga) {log.debug "eventType: " + etype}
-        if (debuga) {log.debug "eventState: " + estate}
+        if (debuga) {log.debug "msg.eventType.text: " + etype}
+        if (debuga) {log.debug "msg.eventState.text: " + estate}
+        // ******************************************************* v1.0.6 START
+        if (etype == "duration") {
+            logtag = " - Duration Event"
+            etype = msg.DurationList.Duration.relationEvent.text()
+            if (debuga) {log.debug "msg.DurationList.Duration.relationEvent.text: " + etype}
+        }
+        if (eetype == "") {eetype = "Unknown"}
+        // ******************************************************** v1.0.6 END
         etype = ">" + etype + "<"
         for (event in SupportedEvents) {
             if (etype == event) {
@@ -970,11 +975,7 @@ void parse(String description) {
         }
     } else {
         msg = rawmsg.body.toString()
-        if (debuga) {
-            log.debug "EOM***********************************************************"
-            log.debug msg
-            log.debug "MULTI-PART EVENT MSG******************************************"
-        }
+        if (debuga) {log.debug "MSG:" + msg}
         for (event in SupportedEvents) {
             if (msg.contains("$event")) {
                 etype = event
@@ -1004,26 +1005,31 @@ void parse(String description) {
     // For Unsuported Events, log the first occurence and ignore the rest
     if (ns) {
         if (state.OtherEventState == "inactive" || etype != state.LastOtherEvent) {
-            log.warn "OTHER EVENT1 on " + cname + ": " + etype
+            log.warn "OTHER EVENT1 on " + cname + ": " + etype + logtag  // v1.0.6
             state.OtherEventState = "active"
             state.LastOtherEvent = etype
             state.LastOtherTime = new Date().format ("EEE MMM d HH:mm:ss")
             state.OtherEventCount = state.OtherEventCount + 1
-            // 1.0.5 Update - Log Unknown Events
+            // 1.0.5 and 1.0.6 Updates - Log Unknown Events
             if (etype == "Unknown") {
-                if (!debuga) {log.warn msg}
-                log.warn "UNKNOWN ALARM SERVER EVENT *************************"
+                if (!debuga) {
+                    if (hdrs["Content-Type"] == "application/xml; charset=\"UTF-8\"" || hdrs["Content-Type"] == "application/xml") {
+                        log.warn "EVENT MESSAGE:" + groovy.xml.XmlUtil.escapeXml(rawmsg.body)
+                    } else {
+                        log.warn "EVENT MESSAGE:" + rawmsg.body
+                    }
+                }
                 log.warn "Please report this event to trsystems.help@gmail.com"
             }
         }
-        // Give whatever this is a few minutes to run its course too
+        // Give whatever this a minute to run its course
         // Most of these are one-time(?) but a few are ongoing like motion
         // And if thats the case, this will continue to get pushed out
         // Cant even test some of these unsupported events
         // And, all cameras behave differntly in terms of how many msgs they send
         // and the interval between while an event is in progress
         // One of my cameras sent 5 messages at 1 per second for each failed login
-        runIn(300, ResetUsupEvent, overwrite)
+        runIn(60, ResetUsupEvent, overwrite)
         return
     }
     if (etype == "AlarmIn") {
@@ -1041,7 +1047,7 @@ void parse(String description) {
     }
     // Supported Motion Event
     if (device.currentValue("motion") == "inactive") {
-        log.warn "MOTION EVENT1 on " + cname + ": " + etype
+        log.warn "MOTION EVENT1 on " + cname + ": " + etype + logtag // v1.0.6
         sendEvent(name:"motion",value:"active")
         state.LastMotionEvent = etype
         state.LastMotionTime = new Date().format ("EEE MMM d HH:mm:ss")
@@ -1049,7 +1055,7 @@ void parse(String description) {
     } else {
         // We may have more than one going on
         if (etype != state.LastMotionEvent) {
-            log.info "MOTION EVENT+ on " + cname + ": " + etype
+            log.info "MOTION EVENT+ on " + cname + ": " + etype + logtag // v.1.0.6
             state.LastMotionEvent = etype
             state.LastMotionTime = new Date().format ("EEE MMM d HH:mm:ss")
             state.MotionEventCount = state.MotionEventCount + 1
