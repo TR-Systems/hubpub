@@ -1,9 +1,9 @@
 {
     "packageName": "Hikvision Camera Controller",
     "author": "TR-Systems",
-    "version": "1.0.5",
-    "dateReleased": "2024-02-23",
-    "releaseNotes": "Bug fix: Null value exception for camera name when logging GET error during save.\n Alarm Server: Log Unknown Event messages for reporting to tr-systems.",
+    "version": "1.0.6",
+    "dateReleased": "2024-02-26",
+    "releaseNotes": "Alarm Server Upgrade: Add support for Motion Duration Events",
     "documentationLink": "https://tr-systems.github.io/web/HCC_UserGuide.html",
     "drivers": [
         {
