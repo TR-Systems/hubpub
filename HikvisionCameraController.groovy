@@ -25,24 +25,26 @@
 // Contact for support: trsystems.help at the little G mail place.
 //******************************************************************************
 // Change Log
-// Date        Version  Release Notes
-// 2024-01-26  1.0.0    First Release: Please refer to the User Guide
-// 2024-02-05  1.0.1    Remove/Replace Ping function from Ok2Run method for all Commands
-//                      - Instead, set zDriver OFF if GET request for current state times out
-//                      - Test/Practice versioning and update with HPM
-// 2024-02-06  1.0.2    Add link to User Guide on device driver page (provided by jtp10181)
-// 2024-02-07  1.0.3    Remove Link to User Guide from top of device driver page due to
-//                      overlay of Events & Logs buttons when viewing device on a phone.
-// 2024-02-22  1.0.4    Bug fix: Update old Hikvision IPMD url paths to ISAPI paths.
-//                      - Affected features: Basic Motion, Alarm Out trigger, IO Status.
-//                      - Required to support newer cameras. May break older cams.
-// 2024-02-23  1.0.5    Bug fix: Null value exception for camera name when logging GET error during save 
-//                      Alarm Server: Log event messages for "Unknown" events for reporting to tr-systems.
-// 2024-02-26  1.0.6    Alarm Server: Add support for new eventType "duration" and associated relationEvent
+// Date      Version  Release Notes
+// 24-01-26  1.0.0    First Release: Please refer to the User Guide
+// 24-02-05  1.0.1    Remove/Replace Ping function from Ok2Run method for all Commands
+//                    - Instead, set zDriver OFF if GET request for current state times out
+//                    - Test/Practice versioning and update with HPM
+// 24-02-06  1.0.2    Add link to User Guide on device driver page (provided by jtp10181)
+// 24-02-07  1.0.3    Remove Link to User Guide from top of device driver page due to
+//                    overlay of Events & Logs buttons when viewing device on a phone.
+// 24-02-22  1.0.4    Bug fix: Update old Hikvision IPMD url paths to ISAPI paths.
+//                    - Affected features: Basic Motion, Alarm Out trigger, IO Status.
+//                    - Required to support newer cameras. May break older cams.
+// 24-02-23  1.0.5    Bug fix: Null value exception for camera name when logging GET error during save 
+//                    Alarm Server: Log event messages for "Unknown" events for reporting to tr-systems.
+// 24-02-26  1.0.6    Alarm Server: Add support for new eventType "duration" and associated relationEvent
+// 24-03-07  1.1.0    Upgrade Alarm Server: Add Pushable Button for Motion Events
+//                    - Please refer to the User Guide - Alarm Server section
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
-@Field static final String DRIVER = "HCC 1.0.6"
+@Field static final String DRIVER = "HCC 1.1.0"
 @Field static final String USER_GUIDE = "https://tr-systems.github.io/web/HCC_UserGuide.html"
 //******************************************************************************
 metadata {
@@ -53,12 +55,13 @@ metadata {
         capability "Actuator"
         capability "Switch"
         capability "MotionSensor"
+        capability "PushableButton"  //** v1.1.0
 
         command "on" , [[name:"Trigger Alarm"]]
         command "off" , [[name:"Clear Alarm"]]
         command "Enable", [[name:"Features",type:"STRING",description:"Features: m.p.in.lc.rx.re.or.ub.ai"]]
         command "Disable", [[name:"Features",type:"STRING",description:"Features: m.p.in.lc.rx.re.or.ub.ai"]]
-        
+        command "push", [[name: "Event", type: "NUMBER", description: "1=in 2=lc 3=m 4=p 5=or 6=re 7=rx 8=ub"]] //** v1.1.0
         attribute "AlarmInH", "STRING"   // Enabled/Disabled State of Alarm Input Handler
         attribute "AlarmIn", "STRING"    // Active/Inactive State of Alarm Input Port
         attribute "AlarmOut", "STRING"   // "
@@ -71,6 +74,9 @@ metadata {
         attribute "RgnExit", "STRING"    // ""
         attribute "UBaggage", "STRING"   // ""
         attribute "motion", "STRING"     // active/inactive
+        attribute "numberOfButtons", "NUMBER"  // last button pushed ** v1.1.0
+        attribute "pushed", "NUMBER"           // last button pushed ** v1.1.0
+        attribute "switch", "STRING"     // alarm on/off follows AlarmIn state ** v1.1.0
         attribute "zDriver", "STRING"    // State of this device in HE: OK, ERR, OFF, CRED
         // OK = Everything is groovy
         // ERR = Unexpected get/put errors occurred.
@@ -289,6 +295,7 @@ void updated() {
         state.AlarmCount = 0
         state.LastMotionEvent = "na"
         state.LastMotionTime = "na"
+        state.LastButtonPush = "na"
         state.MotionEventCount = 0
         state.OtherEventState = "inactive"
         state.LastOtherEvent = "na"
@@ -302,6 +309,9 @@ void updated() {
     if (debug || debuga) {runIn(1800, ResetDebugLogging, overwrite)}
     
     log.warn "Camera $cname validated, ready for operation"
+    sendEvent(name:"numberOfButtons",value:8)  // v1.1.0
+    sendEvent(name:"pushed",value:0)           // v1.1.0
+    sendEvent(name:"switch",value:"off")       // v1.1.0
     sendEvent(name:"zDriver",value:"OK")
 }
 //******************************************************************************
@@ -529,6 +539,8 @@ private GetSetFeatureState(String Feature) {
             camstate = xml.IOPortStatus[0].ioState.text()
             log.info "AlarmIn: " + camstate
             sendEvent(name:"AlarmIn",value:camstate)
+            if (camstate == "active") {sendEvent(name:"switch",value:"on")}  // v1.1.0
+            else {sendEvent(name:"switch",value:"off")}                      // v1.1.0
             camstate = xml.IOPortStatus[1].ioState.text()
             log.info "AlarmOut: " + camstate
             sendEvent(name:"AlarmOut",value:camstate)
@@ -598,7 +610,26 @@ void Disable(String filter) {
     SwitchAll(filter, "false")
     return
 }
+//****************************************************************************** v1.1.0 START
+// PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH
 //******************************************************************************
+void push (buttonNumber) {
+    if (buttonNumber == null) {return}
+    if (buttonNumber < 0 || buttonNumber > 8) {return}
+    sendEvent(name: "pushed", value: buttonNumber, isStateChange: true)
+    state.LastButtonPush = buttonNumber.toString()
+    if (buttonNumber != 0) {
+        log.info "BUTTON PUSHED: ${buttonNumber}, Resetting in 2 seconds."
+        runIn(2, ResetPushButton, overwrite)
+    } else {
+        log.info "BUTTON RESET: ${buttonNumber}"
+    }
+}
+void ResetPushButton() {
+    log.info "RESET BUTTON after manual push"
+    sendEvent(name: "pushed", value: 0)
+}
+//****************************************************************************** V1.1.0 END
 // OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN
 //******************************************************************************
 def Ok2Run(String cmd) {
@@ -638,7 +669,8 @@ private SwitchAlarm(String newstate) {
         log.info "OK, already " + newstate
         if (newstate != devstate) {sendEvent(name:"AlarmOut", value:newstate)}
         if (camaistate != devaistate) {sendEvent(name:"AlarmIn", value:camaistate)}
-        
+        if (camaistate == "active") {sendEvent(name:"switch",value:"on")}  // v1.1.0
+        else {sendEvent(name:"switch",value:"off")}                        // v1.1.0
         sendEvent(name:"zDriver",value:"OK")
         return("OK")
     }
@@ -904,6 +936,8 @@ private SendPutRequest(String strPath, String strXML) {
 void parse(String description) {
     String etype = ""    // eventType
     String estate = ""   // eventState
+    String evnum = ""    // event button number // v1.1.0
+    String lastnum = ""  // LastButtonsPushed
     Boolean ok = false   // Only Supported Motion Events trigger motion on this device
     Boolean ns = false   // Not Supported and Unknown Events are logged and ignored
     String logtag = ""   // Logging tag for new Motion/Duration Event - v1.0.6
@@ -929,6 +963,7 @@ void parse(String description) {
         state.AlarmCount = 0
         state.LastMotionEvent = "na"
         state.LastMotionTime = "na"
+        state.LastButtonPush = "na" // v1.1.0
         state.MotionEventCount = 0
         state.OtherEventState = "inactive"
         state.LastOtherEvent = "na"
@@ -954,7 +989,7 @@ void parse(String description) {
         if (debuga) {log.debug "msg.eventState.text: " + estate}
         // ******************************************************* v1.0.6 START
         if (etype == "duration") {
-            logtag = " - Duration Event"
+            logtag = "-Duration Event"
             etype = msg.DurationList.Duration.relationEvent.text()
             if (debuga) {log.debug "msg.DurationList.Duration.relationEvent.text: " + etype}
         }
@@ -1037,6 +1072,7 @@ void parse(String description) {
         if (device.currentValue("AlarmIn") == "inactive") {
             log.warn "ALARM INPUT on " + cname
             sendEvent(name:"AlarmIn",value:"active")
+            sendEvent(name:"switch",value:"on")               // v1.1.0
             state.AlarmCount = state.AlarmCount + 1
             state.LastAlarm = new Date().format ("EEE MMM d HH:mm:ss")
             return
@@ -1047,18 +1083,35 @@ void parse(String description) {
     }
     // Supported Motion Event
     if (device.currentValue("motion") == "inactive") {
-        log.warn "MOTION EVENT1 on " + cname + ": " + etype + logtag // v1.0.6
         sendEvent(name:"motion",value:"active")
         state.LastMotionEvent = etype
         state.LastMotionTime = new Date().format ("EEE MMM d HH:mm:ss")
         state.MotionEventCount = state.MotionEventCount + 1
+        // ******************************************************** v1.1.0 START
+        evnum = EventButtonNumbers."$etype"
+        state.LastButtonPush = evnum
+        sendEvent(name:"pushed",value:"$evnum")
+        logtag = logtag + "-Push: " + evnum
+        // ******************************************************** v1.1.0 END
+        log.warn "MOTION EVENT1 on " + cname + ": " + etype + logtag // v1.0.6
     } else {
         // We may have more than one going on
         if (etype != state.LastMotionEvent) {
-            log.info "MOTION EVENT+ on " + cname + ": " + etype + logtag // v.1.0.6
             state.LastMotionEvent = etype
             state.LastMotionTime = new Date().format ("EEE MMM d HH:mm:ss")
             state.MotionEventCount = state.MotionEventCount + 1
+            // ******************************************************** v1.1.0 START
+            evnum = EventButtonNumbers."$etype"
+            lastpush = state.LastButtonPush
+            if (lastpush == null) {lastpush=""}
+            if (!lastpush.contains("$evnum")) {
+                lastpush = lastpush + "," + evnum
+                state.LastButtonPush = "$lastpush"
+                sendEvent(name:"pushed",value:"$evnum")
+                logtag = logtag + "-Push: " + evnum
+            }
+            // ******************************************************** v1.1.0 END
+            log.info "MOTION EVENT+ on " + cname + ": " + etype + logtag // v.1.0.6
         }
     }
     // Wait minutes, not seconds for all motion events to clear
@@ -1070,6 +1123,7 @@ void ResetMotion() {
     String cname = device.getDataValue("Name")
     cname = cname.toUpperCase()
     sendEvent(name:"motion",value:"inactive")
+    sendEvent(name:"pushed",value:"0")          // ** v1.1.0
     log.info "MOTION CLEARED on " + cname
 }
 void ResetUsupEvent() {
@@ -1160,6 +1214,18 @@ void ResetCounters() {
     rx:"RgnExit",
     ub:"UBaggage"
     ]
+// ****************************************** v1.1.0 START
+@Field static Map EventButtonNumbers = [
+    Intrusion:"1",
+    LineCross:"2",
+    MotionD:"3",
+    PIRSensor:"4",
+    ObjectR:"5",
+    RgnEnter:"6",
+    RgnExit:"7",
+    UBaggage:"8"
+    ]
+// ****************************************** v1.1.0 END
 // Includes paths to system info and features not implemented
 @Field static Map FeaturePaths = [
     SysInfo:"/ISAPI/System/deviceInfo",
