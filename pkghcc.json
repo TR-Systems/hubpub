@@ -1,9 +1,9 @@
 {
     "packageName": "Hikvision Camera Controller",
     "author": "TR-Systems",
-    "version": "1.0.6",
-    "dateReleased": "2024-02-26",
-    "releaseNotes": "Alarm Server Upgrade to add support for Motion Duration Events",
+    "version": "1.1.0",
+    "dateReleased": "2024-03-07",
+    "releaseNotes": "Alarm Server Upgrade: Button Push for Motion Events<br>* Please review the Alarm Server section of the User Guide.",
     "documentationLink": "https://tr-systems.github.io/web/HCC_UserGuide.html",
     "drivers": [
         {
