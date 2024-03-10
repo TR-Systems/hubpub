@@ -1,9 +1,9 @@
 {
     "packageName": "Hikvision Camera Controller",
     "author": "TR-Systems",
-    "version": "1.1.0",
-    "dateReleased": "2024-03-07",
-    "releaseNotes": "Alarm Server Upgrade: Button Push for Motion Events<br>* Please review the Alarm Server section of the User Guide.",
+    "version": "2.0.0",
+    "dateReleased": "2024-03-10",
+    "releaseNotes": "Your Choice of Driver: Alarm Server, Controller or Both\n  + Changed Motion and Alarm I/O Feature Attributes to State Variables.\n  + Upgrade from 1.05 and 1.10 tested OK.\n  + Recommend Saving Preferences on all existing devices.\n  + Many changes to the User Guide",
     "documentationLink": "https://tr-systems.github.io/web/HCC_UserGuide.html",
     "drivers": [
         {
