@@ -40,11 +40,11 @@
 //                    Alarm Server: Log event messages for "Unknown" events for reporting to tr-systems.
 // 24-02-26  1.0.6    Alarm Server: Add support for new eventType "duration" and associated relationEvent
 // 24-03-07  1.1.0    Upgrade Alarm Server: Add Pushable Button for Motion Events
-// 24-03-09  1.2.0    Provide Option to use Alarm Server, Controller or Both
+//                    - Please refer to the User Guide - Alarm Server section
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
-@Field static final String DRIVER = "HCC 1.2.0"
+@Field static final String DRIVER = "HCC 1.1.0"
 @Field static final String USER_GUIDE = "https://tr-systems.github.io/web/HCC_UserGuide.html"
 //******************************************************************************
 metadata {
@@ -86,47 +86,38 @@ metadata {
 	}
     preferences 
     {
-        input(name: "devUse", type: "enum", //** v1.2.0
-              title:"Select Driver Components",
-              description: " ",
-              options: ["Alarm Server","Controller","Both"],
-              defaultValue: "Both",
-              required: true)
         input(name: "devIP", type: "string", 
               description: " ",
               title:"Camera or NVR IP Address",
               required: true)
         input(name: "devPort", type: "string",
-              title:"Camera or NVR Virtual Port",
-              description: "(for controller)",
+              title:"Camera or NVR Virtual HTTP Port",
+              description: " ",
               defaultValue: "80",
-              required: false) //** v1.2.0
+              required: true)
         input(name: "devCred", type: "password",
               title:"Credentials for Login",
-              description: "userid:password (for controller)",
-              required: false) //** v1.2.0
+              description: "userid:password",
+              required: true)
+        input(name: "devName", type: "string",
+              title:"Camera Name for Verification",
+              description: " ",
+              required: true)
         input(name: "devMotionReset", type: "number",
               title:"Reset Interval for Motion Detection",
               description: "(From 1 to 20 minutes)",
               range: "1..20",
-              devaultValue: 1,
-              required: false) //** v1.2.0
+              devaultValue: "4",
+              required: true)
         input(name: "devResetCounters", type: "enum",
-              title:"Reset Alarm Server Counters",
+              title:"Reset Alarm Server Event Counters",
+              description: "Select frequency",
               options: ["Daily","Weekly","Monthly","Only on Save"],
-              defaultValue: "Only on Save",
-              required: false) //** v1.2.0
+              defaultValue: "Monthly",
+              required: true)
         input(name: "devExclude", type: "string",
-              title:"Exclude from Controller",
+              title:"Features to Exclude from Driver Control",
               description: "List: m.p.in.lc.rx.re.or.ub.ai.ao",
-              required: false)
-        input(name: "devExcludeA", type: "string", //** v1.2.0
-              title:"Exclude from Alarm Server",
-              description: "List: m.p.in.lc.rx.re.or.ub",
-              required: false)
-        input(name: "devName", type: "string",  //** v1.2.0
-              title:"Optional Name for Logging",
-              description: " ",
               required: false)
         input(name: "debug", type: "bool",
               title: "Debug logging for Controller",
@@ -136,7 +127,7 @@ metadata {
               title: "Debug logging for Alarm Server",
               description: "(resets in 30 minutes)",
               defaultValue: false)
-      	// Link to User Guide
+        	//Help Link
     	input name: "UserGuide", type: "hidden", title: fmtHelpInfo("User Guide")
     }
 }
@@ -147,10 +138,23 @@ metadata {
 String strMsg = " " 
 //******************************************************************************
 // CODER BEWARE HACK provided by jtp10181 - unsupported - undocumented
+// A Help Icon for doc links needs to be a built-in setting for all device drivers
+// Not all drivers are plug n play. Certainly not this one.
 //******************************************************************************
 String fmtHelpInfo(String str) {
+    // On Entry: str="User Guide", USER_GUIDE=url, DRIVER="HCC 1.0.x"
+    // prefLink is the text and link that will appear in the "hidden" input field button.
+    // topStyle & Link will create a bordered text box positioned Npx away from
+    // the upper right corner of the page. That box will then float in that
+    // relative position when the browser page is widened or narrowed.
+    // Thus, when viewing the device on a PHONE, that box will overlay the
+    // Events and Logs button at the top of the page so I'm not using it
+    // for that reason. The link in the title for the input field is all I need.
 	String prefLink = "<a href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 70%;'>${DRIVER}</div></a>"
+	String topStyle = "style='font-size: 14px; padding: 1px 6px; border: 2px solid Crimson; border-radius: 6px;'" //SlateGray
+	String topLink = "<a ${topStyle} href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 14px;'>${DRIVER}</div></a>"
     return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>"
+//         + "<div style='text-align: center; position: absolute; top: 46px; right: 4px; padding: 0px;'><ul class='nav'><li>${topLink}</li></ul></div>"
 }
 //******************************************************************************
 // INSTALLED - INSTALLED - INSTALLED - Installing New Camera Device
@@ -167,59 +171,62 @@ void installed() {
 void updated() {
     String errcd = ""
     String dni = ""
-    String cname = ""  //** v1.2.0
-    unschedule()    
-    state.clear()
-    //************************************************************* v1.2.0 START
-    cname = device.getLabel()
-    if (devName == null || devName.trim() == "") {
-        devName = cname
-        device.updateSetting("devName", [value:cname, type:"string"])
-    }
-    cname = cname.toUpperCase()
-    log.warn "Saving Preferences for " + cname + ", using " + devUse
-    if (devUse == "Alarm Server") {
-        if (devMotionReset == null) {device.updateSetting("devMotionReset", [value:1, type:"number"])}
-        log.info "Using Motion Reset Interval: " + device.getSetting("devMotionReset")
-        devIP = devIP.trim()
-        device.updateSetting("devIP", [value:"${devIP}", type:"string"])
-        if (GenerateDNI(devIP) == "ERR") {
-            sendEvent(name:"zDriver",value:"FAILED")
-            return
-        }
-        log.info "$cname Alarm Server now waiting for Event messages from " + devIP
-        sendEvent(name:"motion",value:"inactive")
-        sendEvent(name:"numberOfButtons",value:8)
-        sendEvent(name:"zDriver",value:"OK")
-        return
-    }
-    if (devCred == null) {
-        log.error "Credentials are required"
-        sendEvent(name:"zDriver",value:"FAILED")
-        return
-    }
-    //************************************************************* v1.2.0 END
+    log.warn "Saving Preferences and validating new camera"
     if (devCred.length() > 6 && devCred.substring(0,6) == "admin:") {
-        strMsg = "Hikvision admin account not allowed"
+        strMsg = "Hikvision admin account not allowed. Use Operator account with Remote Parmameters/Settings and Remote Notify options selected."
         log.error strMsg
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
+    unschedule()    
+    state.clear()
     
+    // Required settings won't be null
     devIP = devIP.trim()
     devPort = devPort.trim()
+    devName = devName.trim()
     devCred = devCred.trim()
     device.updateSetting("devIP", [value:"${devIP}", type:"string"])
     device.updateSetting("devPort", [value:"${devPort}", type:"string"])
     device.updateSetting("devCred", [value:"${devCred}", type:"string"])
+    device.updateSetting("devName", [value:"${devName}", type:"string"])
     // Start Fresh
     device.updateDataValue("Name","(initializing)") // 1.0.5 bug fix
     device.removeDataValue("Model")
     device.removeDataValue("Firmware")
+
+    // Save the new credentials
     device.updateDataValue("CamID",devCred.bytes.encodeBase64().toString())
 
+    // Be safe by making it a long
+    long port = devPort.toInteger()
+    if (port < 65001) {
+        log.info "Pinging IP: " + devIP
+    } else {
+        log.info "Pinging NVR: " + devIP
+    }
+    // Start validating
+    if (!PingOK(devIP)) {
+        if (port < 65001) {
+            strMsg = "Ping failed, Bad IP or no route to subnet"
+        } else {
+            strMsg = "Ping failed, NVR is offline"
+        }
+        log.error strMsg
+        sendEvent(name:"zDriver",value:"FAILED")
+        return
+    }
     errcd = GetCameraInfo()
     if (errcd != "OK") {
+        sendEvent(name:"zDriver",value:"FAILED")
+        return
+    }
+    // Get and compare the name added/updated by GetCamerInfo
+    String cname = device.getDataValue("Name")
+    if (cname == null) {cname = ""}
+    if (cname == "") {cname = "(no name)"}
+    if (cname != devName) {
+        log.error "Name mis-match, Camera returned: " + cname
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
@@ -229,22 +236,14 @@ void updated() {
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
-    //************************************************************* v1.2.0 START
-    if (devUse == "Both") {
-        errcd = GetAlarmServerInfo()
-        // Returns OK (is configured), NA (not configured or not available, can't tell which)
-        // or ERR w/strMsg = error message (GET error or incorrectly configured)
-        // state.AlarmSvr is set to either OK or NA and used below.
-        if (errcd == "ERR" || errcd == "CRED") {
-            sendEvent(name:"zDriver",value:"FAILED")
-            return
-        }
-        if (state.AlarmSvr == "OK") {
-            if (devMotionReset == null) {device.updateSetting("devMotionReset", [value:1, type:"number"])}
-            log.info "Using Motion Reset Interval: " + device.getSetting("devMotionReset")
-        }
+    errcd = GetAlarmServerInfo()
+    // Returns OK (is configured), NA (not configured or not available, can't tell which)
+    // or ERR w/strMsg = error message (GET error or incorrectly configured)
+    // state.AlarmSvr is set to either OK or NA and used below.
+    if (errcd == "ERR" || errcd == "CRED") {
+        sendEvent(name:"zDriver",value:"FAILED")
+        return
     }
-    //************************************************************* v1.2.0 END
     // If using NVR Virtual Host, we need to get the subnet ip address for the dni
     // and make sure the default gateway is set if the alarm server is configured.
     if (port >= 65001) {
@@ -267,12 +266,18 @@ void updated() {
     } else {
         dni = devIP
     }
-    //************************************************************* v1.2.0 START
-    if (GenerateDNI(dni) == "ERR") {
+    dni = dni.tokenize(".").collect {String.format( "%02x", it.toInteger() ) }.join()
+    dni = dni.toUpperCase()
+    log.info "Attempting to register Device Network ID: " + dni
+    try {device.deviceNetworkId = "${dni}"
+    } catch (Exception e) {
+        log.error e.message
+        log.error "Required DNI \"$dni\" not unique. Another device with the same IP Address exists on the hub."
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
-    //************************************************************* v1.2.0 END
+    log.info "DNI registered"
+
     errcd = GetSetStates()
     // Returns OK, NA w/StrMsg=new exclude filter, or ERR/CRED w/strMsg=error message
     if (errcd == "ERR" || errcd == "CRED") {
@@ -297,35 +302,19 @@ void updated() {
         state.LastOtherTime = "na"
         state.OtherEventCount = 0
         state.EventMsgCount = 0
-        state.ExcludedEvents = 0 //** v1.2.0
         if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
         if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
         if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
     }
     if (debug || debuga) {runIn(1800, ResetDebugLogging, overwrite)}
     
-    log.warn "$cname validated, ready for operation"
-    if (devUse == "Both") {                        //** v1.2.0
-        sendEvent(name:"motion",value:"inactive")  //** v1.2.0
-        sendEvent(name:"numberOfButtons",value:8)  //** v1.2.0
-    }
-    sendEvent(name:"switch",value:"off")           //** v1.1.0
+    log.warn "Camera $cname validated, ready for operation"
+    sendEvent(name:"numberOfButtons",value:8)  // v1.1.0
+    sendEvent(name:"pushed",value:0)           // v1.1.0
+    sendEvent(name:"switch",value:"off")       // v1.1.0
     sendEvent(name:"zDriver",value:"OK")
 }
-//***************************************************************** v1.2.0 START
-// GENERATE DNI - GENERATE DNI - GENERATE DNI - GENERATE DNI
 //******************************************************************************
-private GenerateDNI(String ip) {
-    String dni = ip.tokenize(".").collect {String.format( "%02x", it.toInteger() ) }.join()
-    dni = dni.toUpperCase()
-    try {device.deviceNetworkId = "${dni}"
-    } catch (Exception e) {
-        log.error e.message
-        return("ERR")
-    }
-    return(dni)
-}
-//******************************************************************* v1.2.0 END
 // RESET DEBUG LOGGING - RESET DEBUG LOGGING - RESET DEBUG LOGGING
 //******************************************************************************
 void ResetDebugLogging() {
@@ -575,34 +564,36 @@ private GetSetFeatureState(String Feature) {
 // ALARM ON - ALARM ON - ALARM ON - ALARM ON - ALARM ON - ALARM ON - ALARM ON
 //******************************************************************************
 void on() {
-    if (devUse != null && devUse == "Alarm Server") {return} //** v1.2.0
-    String cname = devName.toUpperCase()   //** v1.2.0
-    log.warn "TRIGGER ALARM on " + cname
+    String cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
+    log.info "Received request to Trigger Alarm on " + cname
     if (device.currentValue("AlarmOut") == "NA") {
         log.warn "Alarm Out Feature is excluded or not available"
         return}
     if (!Ok2Run("ALARMON")) {return}
+    log.warn "TRIGGER ALARM on " + cname
     SwitchAlarm("active")
 }
 //******************************************************************************
 // ALARM OFF - ALARM OFF - ALARM OFF - ALARM OFF - ALARM OFF - ALARM OFF
 //******************************************************************************
 void off() {
-    if (devUse != null && devUse == "Alarm Server") {return} //** v1.2.0
-    String cname = devName.toUpperCase()   //** v1.2.0
-    log.warn "CLEAR ALARM on " + cname
+    String cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
+    log.info "Received request to Clear Alarm on " + cname
     if (device.currentValue("AlarmOut") == "NA") {
         log.warn "Alarm Out Feature is excluded or not available"
         return}
     if (!Ok2Run("ALARMOFF")) {return}
+    log.warn "CLEAR ALARM on " + cname
     SwitchAlarm("inactive")
 }
 //******************************************************************************
 // ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE
 //******************************************************************************
 void Enable(String filter) {
-    if (devUse != null && devUse == "Alarm Server") {return} //** v1.2.0
-    String cname = devName.toUpperCase()   //** v1.2.0
+    String cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
     log.info "Run ENABLE on $cname with filter: " + filter
     if (!Ok2Run("ENABLE")) {return}
     SwitchAll(filter, "true")
@@ -612,8 +603,8 @@ void Enable(String filter) {
 // DISABLE - DISABLE - DISABLE - DISABLE - DISABLE - DISABLE - DISABLE - DISABLE
 //******************************************************************************
 void Disable(String filter) {
-    if (devUse != null && devUse == "Alarm Server") {return} //** v1.2.0
-    String cname = devName.toUpperCase()   //** v1.2.0
+    String cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
     log.info "Run DISABLE on $cname with filter: " + filter
     if (!Ok2Run("DISABLE")) {return}
     SwitchAll(filter, "false")
@@ -623,19 +614,28 @@ void Disable(String filter) {
 // PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH
 //******************************************************************************
 void push (buttonNumber) {
-    if (devUse != null && devUse == "Controller") {return}
     if (buttonNumber == null) {return}
-    if (buttonNumber < 1 || buttonNumber > 8) {return}
-    String cname = devName.toUpperCase()
+    if (buttonNumber < 0 || buttonNumber > 8) {return}
     sendEvent(name: "pushed", value: buttonNumber, isStateChange: true)
     state.LastButtonPush = buttonNumber.toString()
-    log.info "BUTTON PUSHED on " + cname + ": " + buttonNumber
+    if (buttonNumber != 0) {
+        log.info "BUTTON PUSHED: ${buttonNumber}, Resetting in 2 seconds."
+        runIn(2, ResetPushButton, overwrite)
+    } else {
+        log.info "BUTTON RESET: ${buttonNumber}"
+    }
+}
+void ResetPushButton() {
+    log.info "RESET BUTTON after manual push"
+    sendEvent(name: "pushed", value: 0)
 }
 //****************************************************************************** V1.1.0 END
 // OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN
 //******************************************************************************
 def Ok2Run(String cmd) {
     String devstatus = device.currentValue("zDriver")
+    String cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
     if (devstatus == "FAILED") {
         log.warn "Not allowed to run"
         return(false)}
@@ -868,7 +868,9 @@ private SendGetRequest(String path, String rtype) {
 // LOG GET ERROR - LOG GET ERROR - LOG GET ERROR - LOG GET ERROR
 //******************************************************************************
 private LogGETError() {
-    String cname = devName.toUpperCase() //** v1.2.0
+    cname = device.getDataValue("Name")
+    if (cname == null) {cname = "null"} // 1.0.5 bug fix
+    cname = cname.toUpperCase()
     log.error "GET Error: " + strMsg
     String errcd = "ERR"
     if (strMsg.contains("code: 401")) {
@@ -935,13 +937,14 @@ void parse(String description) {
     String etype = ""    // eventType
     String estate = ""   // eventState
     String evnum = ""    // event button number // v1.1.0
-    String lastpush = ""  // LastButtonsPushed
-    String ecode = ""    // event type feature code //** v1.2.0
+    String lastnum = ""  // LastButtonsPushed
     Boolean ok = false   // Only Supported Motion Events trigger motion on this device
     Boolean ns = false   // Not Supported and Unknown Events are logged and ignored
     String logtag = ""   // Logging tag for new Motion/Duration Event - v1.0.6
 
-    String cname = devName.toUpperCase() //** v1.2.0
+    String cname = device.getDataValue("Name")
+    if (cname == null) {cname = "null"} // 1.0.5 bug fix just to be safe
+    cname = cname.toUpperCase()
 
     if (device.currentValue("zDriver") == "OFF") {
         log.warn "$cname is BACK ONLINE"
@@ -952,11 +955,6 @@ void parse(String description) {
     // the alarm server was configured on the camera AFTER the last Save
     // If null, something happened during Save Preferences
     // Thus, we need to initialize because save doesn't do that if not configured at save time
-    if (state.AlarmCount == null) {state.AlarmCount = 0} //** v1.2.0 upgrade better safe than sorry
-    if (state.MotionEventCount == null) {state.MotionEventCount = 0}
-    if (state.OtherEventCount == null) {state.OtherEventCount = 0}
-    if (state.EventMsgCount == null) {state.EventMsgCount = 0}
-    if (state.ExcludedEvents == null) {state.ExcludedEvents = 0} //** v1.2.0 
     if (state.AlarmSvr == null || state.AlarmSvr == "NA" || state.AlarmSvr == "ERR") {
         log.warn "Alarm Server NOW IN USE on " + cname
         log.info "Initializing State variables"
@@ -972,7 +970,6 @@ void parse(String description) {
         state.LastOtherTime = "na"
         state.OtherEventCount = 0
         state.EventMsgCount = 0
-        state.ExcludedEvents = 0 //** v1.2.0
         if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
         if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
         if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
@@ -992,7 +989,7 @@ void parse(String description) {
         if (debuga) {log.debug "msg.eventState.text: " + estate}
         // ******************************************************* v1.0.6 START
         if (etype == "duration") {
-            logtag = "-Duration"
+            logtag = "-Duration Event"
             etype = msg.DurationList.Duration.relationEvent.text()
             if (debuga) {log.debug "msg.DurationList.Duration.relationEvent.text: " + etype}
         }
@@ -1085,18 +1082,6 @@ void parse(String description) {
         return
     }
     // Supported Motion Event
-    // ************************************************************ v1.2.0 START
-    ecode = FeatureNamesToCode."$etype"
-    if (devExcludeA == null) {devExcludeA = ""}
-    if (devExcludeA.contains("$ecode")) {
-        state.ExcludedEvents = state.ExcludedEvents + 1
-        if (state.LastExcluded == null || state.LastExcluded != etype) {
-            state.LastExcluded = etype
-            log.warn "EXCLUDED MOTION EVENT on " + cname + ": " + etype
-        }
-        return
-    }
-    // ************************************************************ v1.2.0 END
     if (device.currentValue("motion") == "inactive") {
         sendEvent(name:"motion",value:"active")
         state.LastMotionEvent = etype
@@ -1105,7 +1090,7 @@ void parse(String description) {
         // ******************************************************** v1.1.0 START
         evnum = EventButtonNumbers."$etype"
         state.LastButtonPush = evnum
-        sendEvent(name:"pushed",value:evnum,isStateChange:true)  //** v1.2.0
+        sendEvent(name:"pushed",value:"$evnum")
         logtag = logtag + "-Push: " + evnum
         // ******************************************************** v1.1.0 END
         log.warn "MOTION EVENT1 on " + cname + ": " + etype + logtag // v1.0.6
@@ -1114,6 +1099,7 @@ void parse(String description) {
         if (etype != state.LastMotionEvent) {
             state.LastMotionEvent = etype
             state.LastMotionTime = new Date().format ("EEE MMM d HH:mm:ss")
+            state.MotionEventCount = state.MotionEventCount + 1
             // ******************************************************** v1.1.0 START
             evnum = EventButtonNumbers."$etype"
             lastpush = state.LastButtonPush
@@ -1121,7 +1107,7 @@ void parse(String description) {
             if (!lastpush.contains("$evnum")) {
                 lastpush = lastpush + "," + evnum
                 state.LastButtonPush = "$lastpush"
-                sendEvent(name:"pushed",value: evnum)  //** v1.2.0
+                sendEvent(name:"pushed",value:"$evnum")
                 logtag = logtag + "-Push: " + evnum
             }
             // ******************************************************** v1.1.0 END
@@ -1134,12 +1120,15 @@ void parse(String description) {
     runIn (settings.devMotionReset.toInteger() * 60, ResetMotion, overwrite)
 }	
 void ResetMotion() {
-    String cname = devName.toUpperCase() //** v1.2.0
+    String cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
     sendEvent(name:"motion",value:"inactive")
+    sendEvent(name:"pushed",value:"0")          // ** v1.1.0
     log.info "MOTION CLEARED on " + cname
 }
 void ResetUsupEvent() {
-    String cname = devName.toUpperCase() //** v1.2.0
+    String cname = device.getDataValue("Name")
+    cname = cname.toUpperCase()
     state.OtherEventState = "inactive"
     log.info "OTHER EVENT CLEARED on " + cname
 }
@@ -1149,7 +1138,6 @@ void ResetCounters() {
     state.MotionEventCount = 0
     state.OtherEventCount = 0
     state.EventMsgCount = 0
-    state.ExcludedEvents = 0
 }
 //*****************************************************************
 // Static Constants
@@ -1226,22 +1214,12 @@ void ResetCounters() {
     rx:"RgnExit",
     ub:"UBaggage"
     ]
-@Field static Map FeatureNamesToCode = [
-    Intrusion:"in",
-    LineCross:"lc",
-    MotionD:"m",
-    PIRSensor:"p",
-    ObjectR:"or",
-    RgnEnter:"re",
-    RgnExit:"rx",
-    UBaggage:"ub"
-    ]
 // ****************************************** v1.1.0 START
 @Field static Map EventButtonNumbers = [
     Intrusion:"1",
     LineCross:"2",
-    Motion:"3",     //** v1.2.0 bug fix
-    PIR:"4",        //** v1.2.0 bug fix
+    MotionD:"3",
+    PIRSensor:"4",
     ObjectR:"5",
     RgnEnter:"6",
     RgnExit:"7",
