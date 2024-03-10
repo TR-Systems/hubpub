@@ -28,23 +28,26 @@
 // Date      Version  Release Notes
 // 24-01-26  1.0.0    First Release: Please refer to the User Guide
 // 24-02-05  1.0.1    Remove/Replace Ping function from Ok2Run method for all Commands
-//                    - Instead, set zDriver OFF if GET request for current state times out
-//                    - Test/Practice versioning and update with HPM
+//                    * Instead, set zDriver OFF if GET request for current state times out
+//                    * Test/Practice versioning and update with HPM
 // 24-02-06  1.0.2    Add link to User Guide on device driver page (provided by jtp10181)
 // 24-02-07  1.0.3    Remove Link to User Guide from top of device driver page due to
 //                    overlay of Events & Logs buttons when viewing device on a phone.
 // 24-02-22  1.0.4    Bug fix: Update old Hikvision IPMD url paths to ISAPI paths.
-//                    - Affected features: Basic Motion, Alarm Out trigger, IO Status.
-//                    - Required to support newer cameras. May break older cams.
-// 24-02-23  1.0.5    Bug fix: Null value exception for camera name when logging GET error during save 
+//                    * Affected features: Basic Motion, Alarm Out trigger, IO Status.
+//                    * Required to support newer cameras. May break older cams.
+// 24-02-23  1.0.5    Bug fix: Null value exception for camera name when logging GET error during save
 //                    Alarm Server: Log event messages for "Unknown" events for reporting to tr-systems.
-// 24-02-26  1.0.6    Alarm Server: Add support for new eventType "duration" and associated relationEvent
-// 24-03-07  1.1.0    Upgrade Alarm Server: Add Pushable Button for Motion Events
-//                    - Please refer to the User Guide - Alarm Server section
+// 24-02-26  1.0.6    Alarm Server: Add support for eventType "duration" and associated relationEvent
+// 24-03-07  1.1.0    Add Pushable Button for Motion Events
+// 24-03-11  2.0.0    Your Choice of Driver: Alarm Server, Controller or Both
+//                    + Minimize Camera Validation requirements in Saving Preferences
+//                    + Change Motion and Alarm I/O Feature Attributes to State Variables
+//                    + Tested upgrade from 1.0.5 and 1.1.0 without saving preferences on existing devices
 //******************************************************************************
 import groovy.transform.Field // Needed to use @Field static lists/maps
 //******************************************************************************
-@Field static final String DRIVER = "HCC 1.1.0"
+@Field static final String DRIVER = "HCC 2.0.0"
 @Field static final String USER_GUIDE = "https://tr-systems.github.io/web/HCC_UserGuide.html"
 //******************************************************************************
 metadata {
@@ -55,28 +58,17 @@ metadata {
         capability "Actuator"
         capability "Switch"
         capability "MotionSensor"
-        capability "PushableButton"  //** v1.1.0
+        capability "PushableButton"  //** v110
 
         command "on" , [[name:"Trigger Alarm"]]
         command "off" , [[name:"Clear Alarm"]]
         command "Enable", [[name:"Features",type:"STRING",description:"Features: m.p.in.lc.rx.re.or.ub.ai"]]
         command "Disable", [[name:"Features",type:"STRING",description:"Features: m.p.in.lc.rx.re.or.ub.ai"]]
-        command "push", [[name: "Event", type: "NUMBER", description: "1=in 2=lc 3=m 4=p 5=or 6=re 7=rx 8=ub"]] //** v1.1.0
-        attribute "AlarmInH", "STRING"   // Enabled/Disabled State of Alarm Input Handler
-        attribute "AlarmIn", "STRING"    // Active/Inactive State of Alarm Input Port
-        attribute "AlarmOut", "STRING"   // "
-        attribute "Intrusion", "STRING"  // Enabled/Disabled State of Feature"
-        attribute "LineCross", "STRING"  // ""
-        attribute "MotionD", "STRING"    // ""
-        attribute "ObjectR", "STRING"    // ""
-        attribute "PIRSensor", "STRING"  // ""
-        attribute "RgnEnter", "STRING"   // ""
-        attribute "RgnExit", "STRING"    // ""
-        attribute "UBaggage", "STRING"   // ""
+        command "push", [[name: "Event", type: "NUMBER", description: "1=in 2=lc 3=m 4=p 5=or 6=re 7=rx 8=ub"]] //** v110
         attribute "motion", "STRING"     // active/inactive
-        attribute "numberOfButtons", "NUMBER"  // last button pushed ** v1.1.0
-        attribute "pushed", "NUMBER"           // last button pushed ** v1.1.0
-        attribute "switch", "STRING"     // alarm on/off follows AlarmIn state ** v1.1.0
+        attribute "numberOfButtons", "NUMBER"  // last button pushed ** v110
+        attribute "pushed", "NUMBER"           // last button pushed ** v110
+        attribute "switch", "STRING"     // alarm on/off follows AlarmIn state ** v110
         attribute "zDriver", "STRING"    // State of this device in HE: OK, ERR, OFF, CRED
         // OK = Everything is groovy
         // ERR = Unexpected get/put errors occurred.
@@ -86,38 +78,47 @@ metadata {
 	}
     preferences 
     {
+        input(name: "devUse", type: "enum", //** v200
+              title:"Select Driver Components",
+              description: " ",
+              options: ["Alarm Server","Controller","Both"],
+              defaultValue: "Both",
+              required: true)
         input(name: "devIP", type: "string", 
               description: " ",
               title:"Camera or NVR IP Address",
               required: true)
         input(name: "devPort", type: "string",
-              title:"Camera or NVR Virtual HTTP Port",
-              description: " ",
+              title:"Camera or NVR Virtual Port",
+              description: "(for controller)",
               defaultValue: "80",
-              required: true)
+              required: false) //** v200
         input(name: "devCred", type: "password",
               title:"Credentials for Login",
-              description: "userid:password",
-              required: true)
-        input(name: "devName", type: "string",
-              title:"Camera Name for Verification",
-              description: " ",
-              required: true)
+              description: "userid:password (for controller)",
+              required: false) //** v200
         input(name: "devMotionReset", type: "number",
               title:"Reset Interval for Motion Detection",
               description: "(From 1 to 20 minutes)",
               range: "1..20",
-              devaultValue: "4",
-              required: true)
+              devaultValue: 1,
+              required: false) //** v200
         input(name: "devResetCounters", type: "enum",
-              title:"Reset Alarm Server Event Counters",
-              description: "Select frequency",
+              title:"Reset Alarm Server Counters",
               options: ["Daily","Weekly","Monthly","Only on Save"],
-              defaultValue: "Monthly",
-              required: true)
+              defaultValue: "Only on Save",
+              required: false) //** v200
         input(name: "devExclude", type: "string",
-              title:"Features to Exclude from Driver Control",
+              title:"Exclude from Controller",
               description: "List: m.p.in.lc.rx.re.or.ub.ai.ao",
+              required: false)
+        input(name: "devExcludeA", type: "string", //** v200
+              title:"Exclude from Alarm Server",
+              description: "List: m.p.in.lc.rx.re.or.ub",
+              required: false)
+        input(name: "devName", type: "string",  //** v200
+              title:"Optional Name for Logging",
+              description: " ",
               required: false)
         input(name: "debug", type: "bool",
               title: "Debug logging for Controller",
@@ -127,7 +128,7 @@ metadata {
               title: "Debug logging for Alarm Server",
               description: "(resets in 30 minutes)",
               defaultValue: false)
-        	//Help Link
+      	// Link to User Guide
     	input name: "UserGuide", type: "hidden", title: fmtHelpInfo("User Guide")
     }
 }
@@ -136,25 +137,13 @@ metadata {
 // SendGet/Put Request methods, then used for logging and program control in the
 // calling methods. Don't mess with strMsg unless you know what you're doing.
 String strMsg = " " 
+Boolean SavingPreferences = false
 //******************************************************************************
 // CODER BEWARE HACK provided by jtp10181 - unsupported - undocumented
-// A Help Icon for doc links needs to be a built-in setting for all device drivers
-// Not all drivers are plug n play. Certainly not this one.
 //******************************************************************************
 String fmtHelpInfo(String str) {
-    // On Entry: str="User Guide", USER_GUIDE=url, DRIVER="HCC 1.0.x"
-    // prefLink is the text and link that will appear in the "hidden" input field button.
-    // topStyle & Link will create a bordered text box positioned Npx away from
-    // the upper right corner of the page. That box will then float in that
-    // relative position when the browser page is widened or narrowed.
-    // Thus, when viewing the device on a PHONE, that box will overlay the
-    // Events and Logs button at the top of the page so I'm not using it
-    // for that reason. The link in the title for the input field is all I need.
 	String prefLink = "<a href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 70%;'>${DRIVER}</div></a>"
-	String topStyle = "style='font-size: 14px; padding: 1px 6px; border: 2px solid Crimson; border-radius: 6px;'" //SlateGray
-	String topLink = "<a ${topStyle} href='${USER_GUIDE}' target='_blank'>${str}<br><div style='font-size: 14px;'>${DRIVER}</div></a>"
     return "<div style='font-size: 160%; font-style: bold; padding: 2px 0px; text-align: center;'>${prefLink}</div>"
-//         + "<div style='text-align: center; position: absolute; top: 46px; right: 4px; padding: 0px;'><ul class='nav'><li>${topLink}</li></ul></div>"
 }
 //******************************************************************************
 // INSTALLED - INSTALLED - INSTALLED - Installing New Camera Device
@@ -171,62 +160,69 @@ void installed() {
 void updated() {
     String errcd = ""
     String dni = ""
-    log.warn "Saving Preferences and validating new camera"
-    if (devCred.length() > 6 && devCred.substring(0,6) == "admin:") {
-        strMsg = "Hikvision admin account not allowed. Use Operator account with Remote Parmameters/Settings and Remote Notify options selected."
-        log.error strMsg
-        sendEvent(name:"zDriver",value:"FAILED")
-        return
-    }
+    String cname = ""  //** v200
     unschedule()    
     state.clear()
-    
-    // Required settings won't be null
+    //************************************************************* v200 START
+    cname = device.getLabel()
+    if (devName == null || devName.trim() == "") {
+        devName = cname
+        device.updateSetting("devName", [value:"$cname", type:"string"])
+    }
+
+    cname = cname.toUpperCase()
+    log.warn "Saving Preferences for " + cname + ", using " + devUse
+
+    if (devUse == "Alarm Server") {
+        if (devMotionReset == null) {device.updateSetting("devMotionReset", [value:1, type:"number"])}
+        log.info "Using Motion Reset Interval: " + device.getSetting("devMotionReset")
+        devIP = devIP.trim()
+        device.updateSetting("devIP", [value:"${devIP}", type:"string"])
+        if (GenerateDNI(devIP) == "ERR") {
+            sendEvent(name:"zDriver",value:"FAILED")
+            return
+        }
+        log.info "$cname Alarm Server now waiting for Event messages from " + devIP
+        sendEvent(name:"motion",value:"inactive")
+        sendEvent(name:"numberOfButtons",value:8)
+        sendEvent(name:"zDriver",value:"OK")
+        return
+    }
+    //************************************************************* v200 END
+   
     devIP = devIP.trim()
     devPort = devPort.trim()
-    devName = devName.trim()
     devCred = devCred.trim()
     device.updateSetting("devIP", [value:"${devIP}", type:"string"])
     device.updateSetting("devPort", [value:"${devPort}", type:"string"])
     device.updateSetting("devCred", [value:"${devCred}", type:"string"])
-    device.updateSetting("devName", [value:"${devName}", type:"string"])
     // Start Fresh
-    device.updateDataValue("Name","(initializing)") // 1.0.5 bug fix
+    device.removeDataValue("Name")   //** v200
     device.removeDataValue("Model")
     device.removeDataValue("Firmware")
-
-    // Save the new credentials
     device.updateDataValue("CamID",devCred.bytes.encodeBase64().toString())
 
-    // Be safe by making it a long
-    long port = devPort.toInteger()
-    if (port < 65001) {
-        log.info "Pinging IP: " + devIP
-    } else {
-        log.info "Pinging NVR: " + devIP
-    }
-    // Start validating
-    if (!PingOK(devIP)) {
-        if (port < 65001) {
-            strMsg = "Ping failed, Bad IP or no route to subnet"
-        } else {
-            strMsg = "Ping failed, NVR is offline"
-        }
-        log.error strMsg
+    if (devCred == null) {
+        log.error "Credentials are required"
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
+
+    long port = devPort.toInteger()
+    if (port >= 65001 && devUse == "Both") {
+        log.error "NVR Virtual Port is for Controller use only"
+        sendEvent(name:"zDriver",value:"FAILED")
+        return
+    }
+
+    if (devCred.length() > 6 && devCred.substring(0,6) == "admin:") {
+        log.error "Hikvision admin account not allowed"
+        sendEvent(name:"zDriver",value:"FAILED")
+        return
+    }
+
     errcd = GetCameraInfo()
     if (errcd != "OK") {
-        sendEvent(name:"zDriver",value:"FAILED")
-        return
-    }
-    // Get and compare the name added/updated by GetCamerInfo
-    String cname = device.getDataValue("Name")
-    if (cname == null) {cname = ""}
-    if (cname == "") {cname = "(no name)"}
-    if (cname != devName) {
-        log.error "Name mis-match, Camera returned: " + cname
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
@@ -236,110 +232,59 @@ void updated() {
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
-    errcd = GetAlarmServerInfo()
-    // Returns OK (is configured), NA (not configured or not available, can't tell which)
-    // or ERR w/strMsg = error message (GET error or incorrectly configured)
-    // state.AlarmSvr is set to either OK or NA and used below.
-    if (errcd == "ERR" || errcd == "CRED") {
-        sendEvent(name:"zDriver",value:"FAILED")
-        return
-    }
-    // If using NVR Virtual Host, we need to get the subnet ip address for the dni
-    // and make sure the default gateway is set if the alarm server is configured.
-    if (port >= 65001) {
-        errcd = GetSubnetIP()
-        // Returns OK or NOGW with strMsg=subnet ip, or GET ERR w/strMsg = error message
-        if (errcd == "ERR" || errcd == "CRED") {
-            sendEvent(name:"zDriver",value:"FAILED")
-            return    
-        }
-        if (state.AlarmSvr == "OK" && errcd == "NOGW") {
-            log.error "2) Establish NVR Subnet routing per the User Guide"
-            log.error "1) Remove Alarm Server from camera configuration, OR:"
-            log.error "Alarm Server is configured without a Default Gateway for routing."
-            state.AlarmSvr = "NA"
+    //************************************************************* v200 START
+    if (devUse == "Both") {
+        if (GenerateDNI(devIP) == "ERR") {
             sendEvent(name:"zDriver",value:"FAILED")
             return
         }
-        dni = strMsg
-        log.info "Using NVR subnet ip for DNI: " + strMsg
-    } else {
-        dni = devIP
     }
-    dni = dni.tokenize(".").collect {String.format( "%02x", it.toInteger() ) }.join()
-    dni = dni.toUpperCase()
-    log.info "Attempting to register Device Network ID: " + dni
-    try {device.deviceNetworkId = "${dni}"
-    } catch (Exception e) {
-        log.error e.message
-        log.error "Required DNI \"$dni\" not unique. Another device with the same IP Address exists on the hub."
-        sendEvent(name:"zDriver",value:"FAILED")
-        return
-    }
-    log.info "DNI registered"
-
+    SavingPreferences = true
+    //************************************************************* v200 END
     errcd = GetSetStates()
     // Returns OK, NA w/StrMsg=new exclude filter, or ERR/CRED w/strMsg=error message
     if (errcd == "ERR" || errcd == "CRED") {
         sendEvent(name:"zDriver",value:"FAILED")
         return
     }
+    SavingPreferences = false                                  //** v200
     // Add features not found to the Exclude filter
     if (errcd == "NA") {
         strMsg = strMsg + devExclude
         log.warn "Setting new Exclude Filter:" + strMsg
         device.updateSetting("devExclude", [value:"${strMsg}", type:"string"])
     }
-    if (state.AlarmSvr == "OK") {
-        state.LastAlarm = "na"
-        state.AlarmCount = 0
-        state.LastMotionEvent = "na"
-        state.LastMotionTime = "na"
-        state.LastButtonPush = "na"
-        state.MotionEventCount = 0
-        state.OtherEventState = "inactive"
-        state.LastOtherEvent = "na"
-        state.LastOtherTime = "na"
-        state.OtherEventCount = 0
-        state.EventMsgCount = 0
-        if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
-        if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
-        if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
-    }
+
     if (debug || debuga) {runIn(1800, ResetDebugLogging, overwrite)}
     
-    log.warn "Camera $cname validated, ready for operation"
-    sendEvent(name:"numberOfButtons",value:8)  // v1.1.0
-    sendEvent(name:"pushed",value:0)           // v1.1.0
-    sendEvent(name:"switch",value:"off")       // v1.1.0
+    log.warn "$cname validated, ready for operation"
+    if (devUse == "Both") {                        //** v200
+        sendEvent(name:"motion",value:"inactive")  //** v200
+        sendEvent(name:"numberOfButtons",value:8)  //** v200
+    }
+    sendEvent(name:"switch",value:"off")           //** v110
     sendEvent(name:"zDriver",value:"OK")
 }
+//***************************************************************** v200 START
+// GENERATE DNI - GENERATE DNI - GENERATE DNI - GENERATE DNI
 //******************************************************************************
+private GenerateDNI(String ip) {
+    String dni = ip.tokenize(".").collect {String.format( "%02x", it.toInteger() ) }.join()
+    dni = dni.toUpperCase()
+    try {device.deviceNetworkId = "${dni}"
+    } catch (Exception e) {
+        log.error e.message
+        return("ERR")
+    }
+    return(dni)
+}
+//******************************************************************* v200 END
 // RESET DEBUG LOGGING - RESET DEBUG LOGGING - RESET DEBUG LOGGING
 //******************************************************************************
 void ResetDebugLogging() {
     log.info "Debug logging is off"
     device.updateSetting("debug", [value:false, type:"bool"])
     device.updateSetting("debuga", [value:false, type:"bool"])
-}
-//******************************************************************************
-// PING OK - PING OK - PING OK - PING OK - PING OK - PING OK - PING OK
-//******************************************************************************
-private PingOK(String ip) {
-    try {
-        def pingData = hubitat.helper.NetworkUtils.ping(ip,3)
-        int pr = pingData.packetsReceived.toInteger()
-        if (pr == 3) {
-            return(true)
-        } else {
-            return(false)
-        }
-    }
-    catch (Exception e) {
-        strMsg = e.message
-        log.warn "Ping error: " + strMsg
-        return(false)
-    }
 }
 //******************************************************************************
 // GET CAMERA INFO - GET CAMERA INFO - GET CAMERA INFO - GET CAMERA INFO
@@ -412,86 +357,6 @@ private GetUserInfo() {
     return("OK")
 }
 //******************************************************************************
-// GET SUBNET IP - GET SUBNET IP - GET SUBNET IP - GET SUBNET IP - GET SUBNET IP
-//******************************************************************************
-private GetSubnetIP() {
-    String errcd = ""
-    String gwaddr = ""
-    String ipaddr = ""
-    // Get Interfaces/1 (making the assumption its connected on 1)
-    log.info "Checking Network Configuration"
-    xml = SendGetRequest(FeaturePaths.Network,"GPATH")
-    if (strMsg != "OK") {
-        errcd = LogGETError()
-        return(errcd)
-    }
-    ipaddr = xml.IPAddress.ipAddress.text()
-    gwaddr = xml.IPAddress.DefaultGateway.ipAddress.text()
-    log.info "Camera ipAddress: " + ipaddr
-    log.info "Default Gateway: " + gwaddr
-    if (gwaddr == "0.0.0.0") {
-        log.warn "Default Gateway for the NVR subnet is not defined on the camera."
-        errcd = "NOGW"
-    } else {
-        errcd = "OK"
-    }
-    strMsg = ipaddr
-    return(errcd)
-}
-//******************************************************************************
-// GET ALARM SERVER INFO - GET ALARM SERVER INFO - GET ALARM SERVER INFO
-//******************************************************************************
-// Return errcd OK, NA or ERR with strMsg = error message
-private GetAlarmServerInfo() {
-    String errcd = ""
-    String svrid = ""
-    String svrip = ""
-    String svrurl = ""
-    String svrport = ""
-    log.info "Checking Alarm Server configuration"
-    xml = SendGetRequest(FeaturePaths.AlarmSvr,"GPATH")
-    if (strMsg != "OK") {
-        errcd = LogGETError()
-        return(errcd)
-    }
-    def hub = location.hubs[0]
-
-    int i = 0
-    xml.children().each {cnt -> i = i + 1}
-    if (debug) {log.debug "Alarm Server Cnt: " + i.toString()}
-
-    errcd = "NA" // didn't find it
-    state.AlarmSvr = "NA"
-    for (int j = 0; j < i; j++) {
-        svrid = xml.HttpHostNotification[j].id.text()
-        svrip = xml.HttpHostNotification[j].ipAddress.text()
-        svrurl = xml.HttpHostNotification[j].url.text()
-        svrport = xml.HttpHostNotification[j].portNo.text()
-        if (svrip == hub.localIP) {
-            if (svrurl != "/" || svrport != "39501") {
-                log.info "Alarm Svr PORT: " + svrport
-                log.info "Alarm Svr URL: " + svrurl
-                log.info "Alarm Svr IP: " + svrip
-                strMsg = "Alarm Server URL or Port is incorrect. Set to \"/\" and \"39501\""
-                log.error strMsg
-                state.AlarmSvr = "ERR"
-                errcd = "ERR"
-            } else {
-                strMsg = "Alarm Server is configured for HE hub at: " + svrip + ":" + svrport + svrurl
-                log.warn strMsg
-                state.AlarmSvr = "OK"
-                errcd = "OK"
-            }
-        } else {
-            if (svrip != "0.0.0.0") {
-                log.warn "Another Alarm Server is configured at: " + svrip + ":" + svrport + svrurl
-            }
-        }
-    }
-    if (errcd == "NA") {log.warn "Alarm Server is not available or not configured"}
-    return(errcd)
-}
-//******************************************************************************
 // GET SET STATES - GET SET STATES - GET SET STATES - GET SET STATES
 //******************************************************************************
 def GetSetStates() {
@@ -512,7 +377,8 @@ def GetSetStates() {
                 newfilter = newfilter + feature.key + "."
             }
         } else {
-            sendEvent(name:"$feature.value", value:"NA")
+//          sendEvent(name:"$feature.value", value:"NA")   //** v200
+            state."$feature.value"  = "NA"                 //** v200
         }
     }
     if (errcd == "ERR" || errcd == "CRED") {return(errcd)}
@@ -538,16 +404,16 @@ private GetSetFeatureState(String Feature) {
         if (Feature == "AlarmIO") {
             camstate = xml.IOPortStatus[0].ioState.text()
             log.info "AlarmIn: " + camstate
-            sendEvent(name:"AlarmIn",value:camstate)
-            if (camstate == "active") {sendEvent(name:"switch",value:"on")}  // v1.1.0
-            else {sendEvent(name:"switch",value:"off")}                      // v1.1.0
+            state.AlarmIn = camstate
+            if (camstate == "active") {sendEvent(name:"switch",value:"on")}  //** v110
+            else {sendEvent(name:"switch",value:"off")}                      //** v110
             camstate = xml.IOPortStatus[1].ioState.text()
             log.info "AlarmOut: " + camstate
-            sendEvent(name:"AlarmOut",value:camstate)
+            state.AlarmOut = camstate
         } else {
             camstate = xml.enabled.text()
             if (camstate == "true") {camstate = "enabled"} else {camstate = "disabled"}
-            sendEvent(name:"$Feature",value:camstate)
+            state."${Feature}" = camstate              //** v200
             log.info Feature + ": " + camstate
         }
         return("OK")
@@ -555,7 +421,7 @@ private GetSetFeatureState(String Feature) {
         errcd = LogGETError()
         if (errcd == "NA") {
             log.info Feature + " is not available"
-            sendEvent(name:"$Feature",value:"NA")
+            state."${Feature}" = "NA"  //** v200
         }
         return(errcd)
     }
@@ -564,38 +430,36 @@ private GetSetFeatureState(String Feature) {
 // ALARM ON - ALARM ON - ALARM ON - ALARM ON - ALARM ON - ALARM ON - ALARM ON
 //******************************************************************************
 void on() {
-    String cname = device.getDataValue("Name")
-    cname = cname.toUpperCase()
-    log.info "Received request to Trigger Alarm on " + cname
+    if (devUse == "Alarm Server") {return} //** v200
+    if (!Ok2Run("AlarmON")) {return}
+    String cname = devName.toUpperCase()   //** v200
+    log.warn "TRIGGER ALARM on " + cname
     if (device.currentValue("AlarmOut") == "NA") {
         log.warn "Alarm Out Feature is excluded or not available"
         return}
-    if (!Ok2Run("ALARMON")) {return}
-    log.warn "TRIGGER ALARM on " + cname
     SwitchAlarm("active")
 }
 //******************************************************************************
 // ALARM OFF - ALARM OFF - ALARM OFF - ALARM OFF - ALARM OFF - ALARM OFF
 //******************************************************************************
 void off() {
-    String cname = device.getDataValue("Name")
-    cname = cname.toUpperCase()
-    log.info "Received request to Clear Alarm on " + cname
+    if (devUse == "Alarm Server") {return} //** v200
+    if (!Ok2Run("AlarmOFF")) {return}
+    String cname = devName.toUpperCase()   //** v200
+    log.warn "CLEAR ALARM on " + cname
     if (device.currentValue("AlarmOut") == "NA") {
         log.warn "Alarm Out Feature is excluded or not available"
         return}
-    if (!Ok2Run("ALARMOFF")) {return}
-    log.warn "CLEAR ALARM on " + cname
     SwitchAlarm("inactive")
 }
 //******************************************************************************
 // ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE - ENABLE
 //******************************************************************************
 void Enable(String filter) {
-    String cname = device.getDataValue("Name")
-    cname = cname.toUpperCase()
-    log.info "Run ENABLE on $cname with filter: " + filter
-    if (!Ok2Run("ENABLE")) {return}
+    if (devUse == "Alarm Server") {return} //** v200
+    if (!Ok2Run("Enable")) {return}
+    String cname = devName.toUpperCase()   //** v200
+    log.info "ENABLE $cname with filter: " + filter
     SwitchAll(filter, "true")
     return
 }
@@ -603,47 +467,39 @@ void Enable(String filter) {
 // DISABLE - DISABLE - DISABLE - DISABLE - DISABLE - DISABLE - DISABLE - DISABLE
 //******************************************************************************
 void Disable(String filter) {
-    String cname = device.getDataValue("Name")
-    cname = cname.toUpperCase()
-    log.info "Run DISABLE on $cname with filter: " + filter
-    if (!Ok2Run("DISABLE")) {return}
+    if (devUse == "Alarm Server") {return} //** v200
+    if (!Ok2Run("Disable")) {return}
+    String cname = devName.toUpperCase()   //** v200
+    log.info "DISABLE $cname with filter: " + filter
     SwitchAll(filter, "false")
     return
 }
-//****************************************************************************** v1.1.0 START
+//****************************************************************************** v110 START
 // PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH - PUSH
 //******************************************************************************
 void push (buttonNumber) {
+    if (devUse == "Controller") {return}
+    if (!Ok2Run("Push")) {return}
     if (buttonNumber == null) {return}
-    if (buttonNumber < 0 || buttonNumber > 8) {return}
+    if (buttonNumber < 1 || buttonNumber > 8) {return}
+    String cname = devName.toUpperCase()
     sendEvent(name: "pushed", value: buttonNumber, isStateChange: true)
     state.LastButtonPush = buttonNumber.toString()
-    if (buttonNumber != 0) {
-        log.info "BUTTON PUSHED: ${buttonNumber}, Resetting in 2 seconds."
-        runIn(2, ResetPushButton, overwrite)
-    } else {
-        log.info "BUTTON RESET: ${buttonNumber}"
-    }
-}
-void ResetPushButton() {
-    log.info "RESET BUTTON after manual push"
-    sendEvent(name: "pushed", value: 0)
+    log.info "BUTTON PUSHED on " + cname + ": " + buttonNumber
 }
 //****************************************************************************** V1.1.0 END
 // OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN - OK2RUN
 //******************************************************************************
 def Ok2Run(String cmd) {
     String devstatus = device.currentValue("zDriver")
-    String cname = device.getDataValue("Name")
-    cname = cname.toUpperCase()
     if (devstatus == "FAILED") {
-        log.warn "Not allowed to run"
+        log.warn "Not allowed to run: " + cmd
         return(false)}
     if (devstatus == "ERR") {
-        log.warn "Not allowed to run. Fix problem and Save Preferences to reset."
+        log.warn "Not allowed to run: " + cmd + ". Fix problem and Save Preferences to reset."
         return(false)}
     if (devstatus == "CRED") {
-        log.warn "Not allowed to run. Fix creds or config and Save Preferences to reset."
+        log.warn "Not allowed to run: " + cmd + ". Fix creds or config and Save Preferences to reset."
         return(false)}
     return(true)
 }
@@ -652,10 +508,10 @@ def Ok2Run(String cmd) {
 //******************************************************************************
 private SwitchAlarm(String newstate) {
     String errcd = ""
-    String devstate = device.currentValue("AlarmOut")
-    String devaistate = device.currentValue("AlarmIn")
-    String camstate = " "
-    String camaistate = " "
+    String devstate = state.AlarmOut                      //** v200
+    String devaistate = state.AlarmIn                     //** v200
+    String camstate = ""
+    String camaistate = ""
     String path = FeaturePaths.AlarmIO
     def xml = SendGetRequest(path, "GPATH")
     if (strMsg != "OK") {
@@ -667,10 +523,10 @@ private SwitchAlarm(String newstate) {
     camaistate = xml.IOPortStatus[0].ioState.text()
     if (camstate == newstate) {
         log.info "OK, already " + newstate
-        if (newstate != devstate) {sendEvent(name:"AlarmOut", value:newstate)}
-        if (camaistate != devaistate) {sendEvent(name:"AlarmIn", value:camaistate)}
-        if (camaistate == "active") {sendEvent(name:"switch",value:"on")}  // v1.1.0
-        else {sendEvent(name:"switch",value:"off")}                        // v1.1.0
+        state.AlarmOut = newstate                                                    //** v200
+        state.AlarmIn = camaistate                                                   //** v200
+        if (camaistate == "active") {sendEvent(name:"switch",value:"on")}  //** v110
+        else {sendEvent(name:"switch",value:"off")}                        //** v110
         sendEvent(name:"zDriver",value:"OK")
         return("OK")
     }
@@ -690,7 +546,7 @@ private SwitchAlarm(String newstate) {
     if (strMsg == "OK") {
         if (newstate == "high") {newstate = "active"} else {newstate = "inactive"}
         log.info "OK, Alarm Out is now " + newstate
-        sendEvent(name:"AlarmOut", value:newstate)
+        state.AlarmOut = newstate                                             //** v200
         sendEvent(name:"zDriver", value:"OK")
         // Need to wait for the straggler Alarm alerts to be processed
         // before reseting AlarmIn on the device, otherwise it just gets triggered again
@@ -727,7 +583,6 @@ void RefreshAlarmStates() {
 // SWITCH ALL - SWITCH ALL - SWITCH ALL - SWITCH ALL - SWITCH ALL - SWITCH ALL
 //******************************************************************************
 void SwitchAll(String filter, String newstate) {
-    String devstate = " "
     String errcd = " "
     String Path = ""
 
@@ -735,7 +590,7 @@ void SwitchAll(String filter, String newstate) {
 
 //  AlarmInH will only be switched if specified in the filter, by design
     if (filter != "" && filter.contains("ai")) {
-        if (device.currentValue("AlarmInH") != "NA") {
+        if (device.currentValue("AlarmInH") != "NA" || state.AlarmInH != "NA") { //** v200
             errcd = SetFeatureState("AlarmInH",newstate)
             if (errcd != "OK") {return}
         }
@@ -746,8 +601,14 @@ void SwitchAll(String filter, String newstate) {
     errcd = "OK"
     for (feature in MotionFeatures) {
         if (filter == "" || filter.contains("$feature.key")) {
-            if (device.currentValue("$feature.value") != "NA") {
+            if (state."$feature.value" != "NA") {                        //** v200
+                if (state."$feature.value" == null) {SavingPreferences = true}  //** v200
                 errcd = SetFeatureState("$feature.value",newstate)
+                SavingPreferences = false                                //** v200
+                if (errcd == "NA") {                                     //** v200
+                    state."$feature.value" = "NA"                        //** v200
+                    errcd = "OK"                                         //** v200
+                }                                                        //** v200 
                 if (errcd != "OK") {break}
             } else {
                 if (filter.contains("$feature.key")) {log.info "Requested feature *$feature.key* is NA"}
@@ -762,7 +623,7 @@ void SwitchAll(String filter, String newstate) {
 //******************************************************************************
 private SetFeatureState(String Feature, String newstate) {
     String errcd = ""
-    String devstate = device.currentValue("$Feature")
+    String devstate = state."$Feature"                                  //** v200
     String Path = FeaturePaths."$Feature"
     def xml = SendGetRequest(Path, "XML")
     if (strMsg != "OK") {
@@ -794,7 +655,7 @@ private SetFeatureState(String Feature, String newstate) {
     if (camstate == newstate) {
         if (newstate == "true") {newstate = "enabled"} else {newstate = "disabled"}
         log.info "OK, " + Feature + " is already " + newstate
-        sendEvent(name:"$Feature",value:newstate)
+        state."$Feature" = newstate                                     //** v200
         sendEvent(name:"zDriver",value:"OK")
         return("OK")
     }
@@ -810,7 +671,8 @@ private SetFeatureState(String Feature, String newstate) {
     if (strMsg == "OK") {
         if (newstate == "true") {newstate = "enabled"} else {newstate = "disabled"}
         log.info "OK, " + Feature + " is now " + newstate
-        sendEvent(name:"$Feature",value:newstate)
+//      sendEvent(name:"$Feature",value:newstate)                      //** v200
+        state."$Feature" = newstate                                    //** v200
         sendEvent(name:"zDriver",value:"OK")
         return("OK")
     }
@@ -868,11 +730,22 @@ private SendGetRequest(String path, String rtype) {
 // LOG GET ERROR - LOG GET ERROR - LOG GET ERROR - LOG GET ERROR
 //******************************************************************************
 private LogGETError() {
-    cname = device.getDataValue("Name")
-    if (cname == null) {cname = "null"} // 1.0.5 bug fix
-    cname = cname.toUpperCase()
-    log.error "GET Error: " + strMsg
+    //************************************************************* v200 START
+    String cname = devName.toUpperCase()
     String errcd = "ERR"
+    if (strMsg.contains("code: 403")) {
+        if (!SavingPreferences) {
+            log.error "GET Error: " + strMsg
+            log.warn "Resource not available or is restricted at a higher level"
+        }
+        return("NA")
+    }
+    log.error "GET Error: " + strMsg
+    if (strMsg.contains("No route to host") || strMsg.contains ("connect timed out")) {
+        log.warn "$cname is OFFLINE"
+        return("OFF")
+    }
+    //************************************************************* v200 END
     if (strMsg.contains("code: 401")) {
         log.warn "4) Operator Account requires Remote Parameters/Settings and Remote Notify options selected"
         log.warn "3) Credentials do not match or have been changed on the camera since last Save Preferences"
@@ -881,17 +754,9 @@ private LogGETError() {
         log.warn "Authentication Failed, check the following:"
         errcd = "CRED"
     }
-    if (strMsg.contains("code: 403")) {
-        log.warn "Resource not available or is restricted at a higher level"
-        errcd = "NA"
-    }
     if (strMsg.contains("code: 404")) {
         log.warn "Check Network > Advanced > Integration Protocol > CGI Enabled w/Authentication=Digest/Basic"
         log.warn "Hikvision-CGI is NOT ENABLED or IP is not a Hikvision camera"
-    }
-    if (strMsg.contains("No route to host") || strMsg.contains ("connect timed out")) {
-        log.warn "$cname is OFFLINE"
-        errcd = "OFF"
     }
     return(errcd)
 }
@@ -936,26 +801,21 @@ private SendPutRequest(String strPath, String strXML) {
 void parse(String description) {
     String etype = ""    // eventType
     String estate = ""   // eventState
-    String evnum = ""    // event button number // v1.1.0
-    String lastnum = ""  // LastButtonsPushed
+    String evnum = ""    // event button number //** v110
+    String lastpush = ""  // LastButtonsPushed
+    String ecode = ""    // event type feature code //** v200
     Boolean ok = false   // Only Supported Motion Events trigger motion on this device
     Boolean ns = false   // Not Supported and Unknown Events are logged and ignored
-    String logtag = ""   // Logging tag for new Motion/Duration Event - v1.0.6
+    String logtag = ""   // Logging tag for new Motion/Duration Event - v106
 
-    String cname = device.getDataValue("Name")
-    if (cname == null) {cname = "null"} // 1.0.5 bug fix just to be safe
-    cname = cname.toUpperCase()
+    String cname = devName.toUpperCase() //** v200
 
     if (device.currentValue("zDriver") == "OFF") {
         log.warn "$cname is BACK ONLINE"
         sendEvent(name:"zDriver",value:"OK")
     }
-    // Process like normal no matter state the controller is in (FAILED,ERR,CRED,OFF,OK)
-    // If we got here with AlarmSvr in NA  or ERR state,
-    // the alarm server was configured on the camera AFTER the last Save
-    // If null, something happened during Save Preferences
-    // Thus, we need to initialize because save doesn't do that if not configured at save time
-    if (state.AlarmSvr == null || state.AlarmSvr == "NA" || state.AlarmSvr == "ERR") {
+    // Initialize on first event message
+    if (state.AlarmSvr == null || state.AlarmSvr == "NA") {
         log.warn "Alarm Server NOW IN USE on " + cname
         log.info "Initializing State variables"
         state.AlarmSvr = "OK"
@@ -963,13 +823,14 @@ void parse(String description) {
         state.AlarmCount = 0
         state.LastMotionEvent = "na"
         state.LastMotionTime = "na"
-        state.LastButtonPush = "na" // v1.1.0
+        state.LastButtonPush = "na" //** v110
         state.MotionEventCount = 0
         state.OtherEventState = "inactive"
         state.LastOtherEvent = "na"
         state.LastOtherTime = "na"
         state.OtherEventCount = 0
         state.EventMsgCount = 0
+        state.ExcludedEvents = 0 //** v200
         if (devResetCounters == "Daily") {schedule('0 0 1 * * ?',ResetCounters)}
         if (devResetCounters == "Weekly") {schedule('0 0 1 ? * 1',ResetCounters)}
         if (devResetCounters == "Monthly") {schedule('0 0 1 1 * ?',ResetCounters)}
@@ -977,24 +838,24 @@ void parse(String description) {
     def rawmsg = parseLanMessage(description)   
     def hdrs = rawmsg.headers  // its a map
     def msg = ""               // tbd
-    if (debuga) {log.warn "EVENT MESSAGE RECEIVED"} // v1.0.6
+    if (debuga) {log.warn "EVENT MESSAGE RECEIVED"} //** v106
     if (debuga) {hdrs.each {log.debug it}}
     // This is the key to knowing what you have to work with
     if (hdrs["Content-Type"] == "application/xml; charset=\"UTF-8\"" || hdrs["Content-Type"] == "application/xml") {
         msg = new XmlSlurper().parseText(new String(rawmsg.body))
-        if (debuga) {log.debug "MSG:" + groovy.xml.XmlUtil.escapeXml(rawmsg.body)} // v1.0.6
+        if (debuga) {log.debug "MSG:" + groovy.xml.XmlUtil.escapeXml(rawmsg.body)} //** v106
         estate = msg.eventState.text()
         etype = msg.eventType.text()
         if (debuga) {log.debug "msg.eventType.text: " + etype}
         if (debuga) {log.debug "msg.eventState.text: " + estate}
-        // ******************************************************* v1.0.6 START
+        // ******************************************************* v106 START
         if (etype == "duration") {
-            logtag = "-Duration Event"
+            logtag = "-Duration"
             etype = msg.DurationList.Duration.relationEvent.text()
             if (debuga) {log.debug "msg.DurationList.Duration.relationEvent.text: " + etype}
         }
         if (eetype == "") {eetype = "Unknown"}
-        // ******************************************************** v1.0.6 END
+        // ******************************************************** v106 END
         etype = ">" + etype + "<"
         for (event in SupportedEvents) {
             if (etype == event) {
@@ -1040,7 +901,7 @@ void parse(String description) {
     // For Unsuported Events, log the first occurence and ignore the rest
     if (ns) {
         if (state.OtherEventState == "inactive" || etype != state.LastOtherEvent) {
-            log.warn "OTHER EVENT1 on " + cname + ": " + etype + logtag  // v1.0.6
+            log.warn "OTHER EVENT1 on " + cname + ": " + etype + logtag  //** v106
             state.OtherEventState = "active"
             state.LastOtherEvent = etype
             state.LastOtherTime = new Date().format ("EEE MMM d HH:mm:ss")
@@ -1069,10 +930,10 @@ void parse(String description) {
     }
     if (etype == "AlarmIn") {
         // First time in?
-        if (device.currentValue("AlarmIn") == "inactive") {
+        if (state.AlarmIn == null || state.AlarmIn == "inactive") {  //** v200
             log.warn "ALARM INPUT on " + cname
-            sendEvent(name:"AlarmIn",value:"active")
-            sendEvent(name:"switch",value:"on")               // v1.1.0
+            state.AlarmIn = "active"                           //** v200
+            sendEvent(name:"switch",value:"on")                //** v110
             state.AlarmCount = state.AlarmCount + 1
             state.LastAlarm = new Date().format ("EEE MMM d HH:mm:ss")
             return
@@ -1082,35 +943,46 @@ void parse(String description) {
         return
     }
     // Supported Motion Event
+    // ************************************************************ v200 START
+    ecode = FeatureNamesToCode."$etype"
+    if (devExcludeA == null) {devExcludeA = ""}
+    if (devExcludeA.contains("$ecode")) {
+        state.ExcludedEvents = state.ExcludedEvents + 1
+        if (state.LastExcluded == null || state.LastExcluded != etype) {
+            state.LastExcluded = etype
+            log.warn "EXCLUDED MOTION EVENT on " + cname + ": " + etype
+        }
+        return
+    }
+    // ************************************************************ v200 END
     if (device.currentValue("motion") == "inactive") {
         sendEvent(name:"motion",value:"active")
         state.LastMotionEvent = etype
         state.LastMotionTime = new Date().format ("EEE MMM d HH:mm:ss")
         state.MotionEventCount = state.MotionEventCount + 1
-        // ******************************************************** v1.1.0 START
+        // ******************************************************** v110 START
         evnum = EventButtonNumbers."$etype"
         state.LastButtonPush = evnum
-        sendEvent(name:"pushed",value:"$evnum")
+        sendEvent(name:"pushed",value:evnum,isStateChange:true)  //** v200
         logtag = logtag + "-Push: " + evnum
-        // ******************************************************** v1.1.0 END
-        log.warn "MOTION EVENT1 on " + cname + ": " + etype + logtag // v1.0.6
+        // ******************************************************** v110 END
+        log.warn "MOTION EVENT1 on " + cname + ": " + etype + logtag //** v106
     } else {
         // We may have more than one going on
         if (etype != state.LastMotionEvent) {
             state.LastMotionEvent = etype
             state.LastMotionTime = new Date().format ("EEE MMM d HH:mm:ss")
-            state.MotionEventCount = state.MotionEventCount + 1
-            // ******************************************************** v1.1.0 START
+            // ******************************************************** v110 START
             evnum = EventButtonNumbers."$etype"
             lastpush = state.LastButtonPush
             if (lastpush == null) {lastpush=""}
             if (!lastpush.contains("$evnum")) {
                 lastpush = lastpush + "," + evnum
                 state.LastButtonPush = "$lastpush"
-                sendEvent(name:"pushed",value:"$evnum")
+                sendEvent(name:"pushed",value: evnum)  //** v200
                 logtag = logtag + "-Push: " + evnum
             }
-            // ******************************************************** v1.1.0 END
+            // ******************************************************** v110 END
             log.info "MOTION EVENT+ on " + cname + ": " + etype + logtag // v.1.0.6
         }
     }
@@ -1120,15 +992,12 @@ void parse(String description) {
     runIn (settings.devMotionReset.toInteger() * 60, ResetMotion, overwrite)
 }	
 void ResetMotion() {
-    String cname = device.getDataValue("Name")
-    cname = cname.toUpperCase()
+    String cname = devName.toUpperCase() //** v200
     sendEvent(name:"motion",value:"inactive")
-    sendEvent(name:"pushed",value:"0")          // ** v1.1.0
     log.info "MOTION CLEARED on " + cname
 }
 void ResetUsupEvent() {
-    String cname = device.getDataValue("Name")
-    cname = cname.toUpperCase()
+    String cname = devName.toUpperCase() //** v200
     state.OtherEventState = "inactive"
     log.info "OTHER EVENT CLEARED on " + cname
 }
@@ -1138,6 +1007,7 @@ void ResetCounters() {
     state.MotionEventCount = 0
     state.OtherEventCount = 0
     state.EventMsgCount = 0
+    state.ExcludedEvents = 0
 }
 //*****************************************************************
 // Static Constants
@@ -1214,18 +1084,28 @@ void ResetCounters() {
     rx:"RgnExit",
     ub:"UBaggage"
     ]
-// ****************************************** v1.1.0 START
+@Field static Map FeatureNamesToCode = [
+    Intrusion:"in",
+    LineCross:"lc",
+    MotionD:"m",
+    PIRSensor:"p",
+    ObjectR:"or",
+    RgnEnter:"re",
+    RgnExit:"rx",
+    UBaggage:"ub"
+    ]
+// ****************************************** v110 START
 @Field static Map EventButtonNumbers = [
     Intrusion:"1",
     LineCross:"2",
-    MotionD:"3",
-    PIRSensor:"4",
+    Motion:"3",     //** v200 bug fix
+    PIR:"4",        //** v200 bug fix
     ObjectR:"5",
     RgnEnter:"6",
     RgnExit:"7",
     UBaggage:"8"
     ]
-// ****************************************** v1.1.0 END
+// ****************************************** v110 END
 // Includes paths to system info and features not implemented
 @Field static Map FeaturePaths = [
     SysInfo:"/ISAPI/System/deviceInfo",
