@@ -947,8 +947,8 @@ void parse(String description) {
     ecode = FeatureNamesToCode."$etype"
     if (devExcludeA == null) {devExcludeA = ""}
     if (devExcludeA.contains("$ecode")) {
-        state.ExcludedEvents = state.ExcludedEvents + 1
         if (state.LastExcluded == null || state.LastExcluded != etype) {
+            state.ExcludedEvents = state.ExcludedEvents + 1
             state.LastExcluded = etype
             log.warn "EXCLUDED MOTION EVENT on " + cname + ": " + etype
         }
