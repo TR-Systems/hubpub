@@ -173,8 +173,8 @@ void updated() {
     cname = cname.toUpperCase()
     log.warn "Saving Preferences for " + cname + ", using " + devUse
 
+    if (devMotionReset == null) {device.updateSetting("devMotionReset", [value:1, type:"number"])}
     if (devUse == "Alarm Server") {
-        if (devMotionReset == null) {device.updateSetting("devMotionReset", [value:1, type:"number"])}
         log.info "Using Motion Reset Interval: " + device.getSetting("devMotionReset")
         devIP = devIP.trim()
         device.updateSetting("devIP", [value:"${devIP}", type:"string"])
